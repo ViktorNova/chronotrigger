@@ -11,8 +11,7 @@ chronotrigger uses these rad Python modules
  https://pypi.python.org/pypi/JACK-Client/
  
 ##Requirements
- - Python 3
+ - Python 3 
  - liblo and pyliblo
- - jack-client (sudo pip3 install jack-client)
- - PyQt4 for optional GUI (will switch to a web UI soon)
- - NSM or something that uses NSM API v1.2
+ - cffi
+ 
