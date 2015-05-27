@@ -15,14 +15,16 @@ from time import sleep
 client = jack.Client("chronotrigger")
 client.activate()
 
+# Give clients a chance to load
+sleep(5)                        #TODO: Query nsmd to get all_clients_are_loaded = True instead (if running under NSM)
 
-#TODO: Go to the beginning of the song
+#Go to the beginning of the song
 jack.Client.transport_locate(client, 1)
 
-#TODO: Start the transport
+#Start the transport
 jack.Client.transport_start(client)
 
-
+#####################################################
 
 # Test - return a human readable time
 while True:
