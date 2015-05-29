@@ -26,10 +26,10 @@ endbar = int(args.endbar)
 nextsong = args.nextsong
 
 NSM_URL = os.getenv('NSM_URL')
-#NSM_URL = "osc.udp://datakTARR:17545/" # for testing - change this to your current NSM url. This changes each time nsmd is launched, you can find it out by adding xterm to your session, then running "echo $NSM_URL"
 if not NSM_URL:
     print("NSM_URL is not set, not running inside Non Session Manager, exiting")
     sys.exit()
+#NSM_URL = "osc.udp://datakTARR:11046/" # for debuging - change this to your current NSM url. This changes each time nsmd is launched, you can find it out by adding xterm to your session, then running "echo $NSM_URL"
 
 
 print("NSM Daemon found at ", NSM_URL)
@@ -84,5 +84,6 @@ client.close()
 
 print("Closing session and loading next song '", nextsong, "' NOW!")
 
-message = liblo.Message("/nsm/open/", "nextsong")
+message = liblo.Message("/nsm/server/open", nextsong)
+print(message)
 liblo.send(NSM_URL, message)
