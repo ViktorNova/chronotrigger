@@ -116,9 +116,10 @@ ourNsmClient, process = nsmclient.init(prettyName = "ChronoTrigger", capabilitie
 # ourNsmClient.updateProgress(value from 0.1 to 1.0) #give percentage during load, save and other heavy operations
 # ourNsmClient.setDirty(True or False) #Inform NSM of the save status. Are there unsaved changes?
 
+while True:
+    process()
 
-
-
+    
 nsmclient.init(prettyName = "ChronoTrigger", capabilities = capabilities, )
 
 # [[[[[ NSM CLIENT SECTION ]]]]] -------------------------------------
@@ -145,7 +146,6 @@ jack.Client.transport_start(client)
 
 # Wait for the song to end
 while bar < endbar:
-    process()       # Keep pynsmclient loop on the phone
     print(" ")
     # Print everything for the hell of it
     transport = client.transport_query()
