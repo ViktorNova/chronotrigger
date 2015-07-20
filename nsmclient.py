@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+#  -*- coding: utf-8 -*-
 
 """
 Author: Nils Gey ich@nilsgey.de http://www.nilsgey.de  April 2013.
@@ -26,53 +26,53 @@ and then call init() with the right parameters.
 See example.py
 """
 
-#You need pyliblo for Python3 for nsmclient and of course an installed and running non-session-manager
+# You need pyliblo for Python3 for nsmclient and of course an installed and running non-session-manager
 import liblo, os
 from signal import signal, SIGTERM, SIGKILL
 import __main__
 
-#We can change the pretty name as only command line option though. Enabling multiple instances of the same. But it must be a fixed name. It will tell NSM which instance/saved file to load.
+# We can change the pretty name as only command line option though. Enabling multiple instances of the same. But it must be a fixed name. It will tell NSM which instance/saved file to load.
 NSM_ANNOUNCE = "/nsm/server/announce"
 API_VERSION_MAJOR = 1
 API_VERSION_MINOR = 2
 
 class States(object):
     def __init__(self, env):
-        self.sessionIsLoaded = False #NSM reported the session is loaded
-        self.nsmUrl = env # NSM_URL environment variable
-        self.welcomeMessage = self.sessionManagerName = None #set by ourNsmClient.welcome()
-        self.nsmCapabilities = set() #set by ourNsmClient.welcome(). You can test it with "if capability in self.nsmCapabilities:"
-        self.pathBeginning =  self.prettyNSMName = self.clientId = None # set by ourNsmClient.openFile()
-        self.lastDirtyState = False #Everything is clean and shiny in the beginning.
+        self.sessionIsLoaded = False # NSM reported the session is loaded
+        self.nsmUrl = env #  NSM_URL environment variable
+        self.welcomeMessage = self.sessionManagerName = None # set by ourNsmClient.welcome()
+        self.nsmCapabilities = set() # set by ourNsmClient.welcome(). You can test it with "if capability in self.nsmCapabilities:"
+        self.pathBeginning =  self.prettyNSMName = self.clientId = None #  set by ourNsmClient.openFile()
+        # Everything is clean and shiny in the beginning.self.lastDirtyState = False 
 
 class OurNsmClient(object):
     def __init__(self, states):
-        #Functions to re-implement
-        #Obligatory functios
+        # Functions to re-implement
+        # Obligatory functios
         self.function_open = self.nothing
         self.function_save = self.nothing
 
-        #Optional functions
+        # Optional functions
         self.function_quit = self.nothing
         self.function_showGui = self.nothing
         self.function_hideGui = self.nothing
         self.function_sessionIsLoaded = self.nothing
 
-        #Add functions to our osc server that receives from NSM.
-        signal(SIGTERM, self._signal_handler) #NSM sends SIGTERM. Nothing more.
-        self.libloServer = liblo.Server() #I hope that is a random, free, port
-        self.libloServer.add_method("/reply", None, self.welcome) # NSM Welcome Message
-        self.libloServer.add_method("/error", None, self.receiveError) # NSM Error messages
+        # Add functions to our osc server that receives from NSM.
+        signal(SIGTERM, self._signal_handler) # NSM sends SIGTERM. Nothing more.
+        self.libloServer = liblo.Server() # I hope that is a random, free, port
+        self.libloServer.add_method("/reply", None, self.welcome) #  NSM Welcome Message
+        self.libloServer.add_method("/error", None, self.receiveError) #  NSM Error messages
         self.libloServer.add_method("/nsm/client/open", None, self.openFile)
         self.libloServer.add_method("/nsm/client/save", None, self.saveFile)
         self.libloServer.add_method("/nsm/client/session_is_loaded", None, self.isLoaded)
         self.libloServer.add_method("/nsm/client/show_optional_gui", None, self.showGui)
         self.libloServer.add_method("/nsm/client/hide_optional_gui", None, self.hideGui)
 
-        #For your information. There are function which can just be called directly:
-        #ourNsmClient.updateProgress(value from 0.1 to 1.0) #give percentage during load, save and other heavy operations
-        #ourNsmClient.setDirty(True or False) #Inform NSM of the save status. Are there unsaved changes?
-        #ourNsmClient.sendError(errorCode or String, message string)
+        # For your information. There are function which can just be called directly:
+        # ourNsmClient.updateProgress(value from 0.1 to 1.0) # give percentage during load, save and other heavy operations
+        # ourNsmClient.setDirty(True or False) # Inform NSM of the save status. Are there unsaved changes?
+        # ourNsmClient.sendError(errorCode or String, message string)
 
         self.errorCodes = {"ERR_GENERAL":   -1,
                         "ERR_INCOMPATIBLE_API" : -2,
@@ -97,8 +97,8 @@ class OurNsmClient(object):
                         -11: -11,
                         }
 
-        self.libloServer.add_method(None, None, self.fallback) # register a fallback for unhandled messages
-        self.states = states #A shortcut to the global states
+        self.libloServer.add_method(None, None, self.fallback) #  register a fallback for unhandled messages
+        self.states = states # A shortcut to the global states
 
 
     def nothing(*args):
@@ -108,8 +108,8 @@ class OurNsmClient(object):
         """/reply "/nsm/server/announce" s:message s:name_of_session_manager s:capabilities
 
         Receiving this message means we are now part of a session"""
-        #print ("Welcome", path, argList)
-        #path is "/reply"
+        # print ("Welcome", path, argList)
+        # path is "/reply"
         try:
             devNull, self.states.welcomeMessage, self.states.sessionManagerName, self.states.nsmCapabilities = argList
         except:
@@ -119,7 +119,7 @@ class OurNsmClient(object):
             self.states.nsmCapabilities = set(self.states.nsmCapabilities[1:-1].split(":"))
 
     def openFile(self, path, argList, types):
-        #TODO: send real errors with error codes
+        # TODO: send real errors with error codes
         """/nsm/client/open s:path_to_instance_specific_project s:display_name s:client_id
 
         A response is REQUIRED as soon as the open operation has been
@@ -128,17 +128,17 @@ class OurNsmClient(object):
         """
 
         self.states.pathBeginning, self.states.prettyNSMName, self.states.clientId = argList
-        loadState, fileNameOrLoadMessage = self.function_open(self.states.pathBeginning, self.states.clientId) #Call the user function
+        loadState, fileNameOrLoadMessage = self.function_open(self.states.pathBeginning, self.states.clientId) # Call the user function
         if loadState:
             liblo.send(states.nsmUrl, "/reply", "/nsm/client/open", " ".join([self.states.pathBeginning+"/"+fileNameOrLoadMessage, "successfully opened"]))
-        else: #the string indicates the error.
+        else: # the string indicates the error.
             liblo.send(states.nsmUrl, "/error", "/nsm/client/open", -1, " ".join(["Not loaded. Error:", fileNameOrLoadMessage]))
-            os.kill (os.getpid(), SIGKILL) #Somehow a SIGTERM here gets ignored.
-            #this can go wrong if the quit-hook user function tries to shutdown things which have not been initialized yet. For example the jack engine which is by definition started AFTER nsm-open
+            os.kill (os.getpid(), SIGKILL) # Somehow a SIGTERM here gets ignored.
+            # this can go wrong if the quit-hook user function tries to shutdown things which have not been initialized yet. For example the jack engine which is by definition started AFTER nsm-open
 
 
     def saveFile(self, path, argList, types):
-        #TODO: send real errors with error codes
+        # TODO: send real errors with error codes
         """/nsm/client/save
 
         This message will only be delivered after a previous open
@@ -147,11 +147,11 @@ class OurNsmClient(object):
 
         argList is empty, types is empty.
         """
-        saveState, fileNameOrSaveMessage = self.function_save(self.states.pathBeginning) #Call the user function
+        saveState, fileNameOrSaveMessage = self.function_save(self.states.pathBeginning) # Call the user function
         if saveState:
             liblo.send(states.nsmUrl, "/reply", "/nsm/client/save", " ".join([self.states.pathBeginning+"/"+fileNameOrSaveMessage, "successfully saved"]))
             self.setDirty(False, internal=True)
-        else: #the string indicates the error.
+        else: # the string indicates the error.
             print (" ".join(["Not saved. Error:", fileNameOrSaveMessage]))
             liblo.send(states.nsmUrl, "/error", "/nsm/client/save", -1, " ".join(["Not saved. Error:", fileNameOrSaveMessage]))
 
@@ -195,8 +195,8 @@ class OurNsmClient(object):
             elif (not trueOrFalse) and states.lastDirtyState is True:
                 states.lastDirtyState = False
                 liblo.send(states.nsmUrl, "/nsm/client/is_clean")
-            #else: #whatever it was, we were already at this state. Just ignore
-            #    pass
+            # else: # whatever it was, we were already at this state. Just ignore
+            #     pass
 
         else:
             if not internal:
@@ -219,7 +219,7 @@ class OurNsmClient(object):
         """Set the label in the NSM gui"""
         liblo.send(states.nsmUrl, "/nsm/client/label", str(label))
 
-    #GUI
+    # GUI
     def showGui(self, *args):
         """Only execute if the server has the capabilities to handle
         optional GUIs. If not ignore that command"""
@@ -227,7 +227,7 @@ class OurNsmClient(object):
             self.function_showGui()
             liblo.send(states.nsmUrl, "/nsm/client/gui_is_shown")
         else:
-            pass #TODO: send general error?
+            pass # TODO: send general error?
 
     def hideGui(self, *args):
         """Only execute if the server has the capabilities to handle
@@ -236,9 +236,9 @@ class OurNsmClient(object):
             self.function_hideGui()
             liblo.send(states.nsmUrl, "/nsm/client/gui_is_hidden")
         else:
-            pass #TODO: send general error?
+            pass # TODO: send general error?
 
-    #Error, Fallback and Quit functions.
+    # Error, Fallback and Quit functions.
     def receiveError(self, path, args, types):
         """/error "/nsm/server/announce" i:error_code s:error_message
         -1 ERR_GENERAL  General Error
@@ -246,19 +246,19 @@ class OurNsmClient(object):
         -3 ERR_BLACKLISTED  Client has been blacklisted.
         """
         devNull, errorCode, errorMessage = args
-        if args[1] == -2: #ERR_INCOMPATIBLE_API
-            #self.function_quit()
+        if args[1] == -2: # ERR_INCOMPATIBLE_API
+            # self.function_quit()
             self.sendError(-2, "Incompatible API. Client shuts down itself")
-            os.kill (os.getpid(), SIGKILL) #Somehow a SIGTERM here gets ignored.
-        elif args[1] == -3: #ERR_BLACKLISTED
-            #self.function_quit()
+            os.kill (os.getpid(), SIGKILL) # Somehow a SIGTERM here gets ignored.
+        elif args[1] == -3: # ERR_BLACKLISTED
+            # self.function_quit()
             self.sendError(-2, "Client black listed. Client shuts down itself")
-            os.kill (os.getpid(), SIGKILL) #Somehow a SIGTERM here gets ignored.
+            os.kill (os.getpid(), SIGKILL) # Somehow a SIGTERM here gets ignored.
         else:
-            self.sendError("Client has received error but does not know how to handle it yet. #IMPLEMENT", errorCode, errorMessage) #TODO
+            self.sendError("Client has received error but does not know how to handle it yet. # IMPLEMENT", errorCode, errorMessage) # TODO
 
     def sendError(self, errorCode, errorMessage):
-        errorCode = self.errorCodes[errorCode] #make sure we send a number.
+        errorCode = self.errorCodes[errorCode] # make sure we send a number.
         liblo.send(states.nsmUrl, "/error", NSM_ANNOUNCE, errorCode, errorMessage)
 
 
@@ -300,8 +300,8 @@ def init(prettyName, capabilities, requiredFunctions, optionalFunctions, sleepVa
         if function:
             setattr(ourNsmClient, identifier, function)
 
-    #Finally tell NSM we are ready and start the main loop
-    #__file__ stands for the executable name
+    # Finally tell NSM we are ready and start the main loop
+    # __file__ stands for the executable name
     if os.path.dirname(__main__.__file__) in os.environ["PATH"]:
         executableName = os.path.basename(__main__.__file__)
     else:
@@ -309,14 +309,14 @@ def init(prettyName, capabilities, requiredFunctions, optionalFunctions, sleepVa
 
     liblo.send(states.nsmUrl, NSM_ANNOUNCE, prettyName, capabilitiesString, executableName, API_VERSION_MAJOR, API_VERSION_MINOR, os.getpid())
 
-    #Wait for the welcome message.
+    # Wait for the welcome message.
     while not states.welcomeMessage:
         ourNsmClient.libloServer.recv(100)
 
-    #if the optional gui capability is not present then clients with optional-guis MUST always keep them visible
+    # if the optional gui capability is not present then clients with optional-guis MUST always keep them visible
     if "optional-gui" in states.clientCapabilities:
         if not "optional-gui" in states.nsmCapabilities:
-            ourNsmClient.function_showGui() #call once. All other osc calls in ourNsmClient will get ignored automatically.
+            ourNsmClient.function_showGui() # call once. All other osc calls in ourNsmClient will get ignored automatically.
             liblo.send(states.nsmUrl, "/nsm/client/gui_is_shown")
         else:
             if startsWithGui:
@@ -327,4 +327,4 @@ def init(prettyName, capabilities, requiredFunctions, optionalFunctions, sleepVa
                 liblo.send(states.nsmUrl, "/nsm/client/gui_is_hidden")
 
 
-    return ourNsmClient, lambda: ourNsmClient.libloServer.recv(sleepValueMs) #loop and dispatch messages every 100ms
+    return ourNsmClient, lambda: ourNsmClient.libloServer.recv(sleepValueMs) # loop and dispatch messages every 100ms

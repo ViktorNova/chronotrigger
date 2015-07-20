@@ -2,19 +2,22 @@
 # Switch to the next song in NSM when Jack transport reaches a certain point
 # __author__ = 'Viktor Nova'
 # from _ast import arg
-import liblo
 
+import os
+
+
+# for debuging - uncomment the os.environ line and
+# change the value to your current NSM url.
+# This changes each time nsmd is launched, you can find it out by adding xterm to your session, then running "echo $NSM_URL"
+os.environ["NSM_URL"] = "osc.udp://datakTARR:11635/"
+
+import liblo
 import nsmclient            # Local copy from latest git master: https://raw.githubusercontent.com/nilsgey/pynsmclient/master/nsmclient.py
 import jack                 # Local copy from latest git master: https://raw.githubusercontent.com/spatialaudio/jackclient-python/master/jack.py
-import os
+
 import sys
 from time import sleep
 # import argparse
-
-# --------------------------------------------------------------------
-# TEMPORARY SECTION - to make it work for the show
-# TODO: Figure out how to actually use nsmclient.py
-
 
 # Get song position to switch at and next song to automatically switch to
 # parser = argparse.ArgumentParser()
@@ -24,8 +27,6 @@ from time import sleep
 
 # TODO: this might need to change or disappear now
 NSM_URL = os.getenv('NSM_URL')
-# for debuging - change the next line to your current NSM url. This changes each time nsmd is launched, you can find it out by adding xterm to your session, then running "echo $NSM_URL"
-# NSM_URL = "osc.udp://datakTARR:11046/"
 if not NSM_URL:
     print("NSM_URL is not set, not running inside Non Session Manager, exiting")
     sys.exit()
@@ -75,6 +76,7 @@ def myLoadFunction(pathBeginning, clientId):
 
 
 def mySaveFunction(pathBeginning):
+    print("-------- SAVE  DEBUG SECTION --------")
     """Pretend to save a file"""
     print("In the Save function, pathBeginning = ", pathBeginning)
     pathBeginning = os.path.split(pathBeginning)[0]
@@ -119,7 +121,7 @@ ourNsmClient, process = nsmclient.init(prettyName = "ChronoTrigger", capabilitie
 while True:
     process()
 
-    
+
 nsmclient.init(prettyName = "ChronoTrigger", capabilities = capabilities, )
 
 # [[[[[ NSM CLIENT SECTION ]]]]] -------------------------------------
@@ -133,9 +135,9 @@ client.activate()
 jack.Client.transport_locate(client, 1)
 bar = 1
 
-print("Current song position: Bar ", bar)
-print("Song ends at bar ", endbar)
-print("Switching to next song '", nextsong, "' in ", (endbar - bar), "bars")
+print("=) =) =) Current song position: Bar ", bar)
+print("=) =) =) Song ends at bar ", endbar)
+print("=) =) =) Switching to next song '", nextsong, "' in ", (endbar - bar), "bars")
 
 # Give clients a chance to load   TODO: Query nsmd to get all_clients_are_loaded = True instead (if running under NSM)
 sleep(5)
