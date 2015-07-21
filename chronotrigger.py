@@ -4,19 +4,26 @@
 # from _ast import arg
 
 import os
+
 # for debuging - uncomment the os.environ line and
 # change the value to your current NSM url.
 # This changes each time nsmd is launched, you can find it out by adding xterm to your session, then running "echo $NSM_URL"
 from sys import stdout
-
 os.environ["NSM_URL"] = "osc.udp://datakTARR:11635/"
 
-# TODO: Make this work outside NSM, in case anyone needs it
+
 NSM_URL = os.getenv('NSM_URL')
 if not NSM_URL:
     print("NSM_URL is not set, not running inside Non Session Manager, exiting")
     sys.exit()
 print("NSM Daemon found at ", NSM_URL)
+
+# TODO: Make this work outside NSM with arguments and an arbitrary OSC message/receiver
+# import argparse
+# parser = argparse.ArgumentParser()
+# parser.add_argument("endbar")   # First argument (# Bar where song ends. When JACK transport reaches this bar, the song is considered to be over, and we will switch sessions and load the next song)
+# parser.add_argument("nextsong") # Second argument  (Name of the song we will automatically switch to when this song is finished)
+# args = parser.parse_args()
 
 import liblo
 import nsmclient            # Local copy from latest git master: https://raw.githubusercontent.com/nilsgey/pynsmclient/master/nsmclient.py
@@ -26,19 +33,13 @@ import sys
 from time import sleep
 
 # Global variables
-configfile = None
-endbar = None
-nextsong = None
+session_name    = None
+configfile      = None
+bar             = None
+endbar          = None
+nextsong        = None
 
-# import argparse
-# Get song position to switch at and next song to automatically switch to
-# parser = argparse.ArgumentParser()
-# parser.add_argument("endbar")   # First argument (# Bar where song ends. When JACK transport reaches this bar, the song is considered to be over, and we will switch sessions and load the next song)
-# parser.add_argument("nextsong") # Second argument  (Name of the song we will automatically switch to when this song is finished)
-# args = parser.parse_args()
-
-# [[[[[ NSM CLIENT SECTION ]]]]] -------------------------------------
-
+# NSM client capabilities
 capabilities = {
     "switch" : False,		# client is capable of responding to multiple `open` messages without restarting
     "dirty" : False, 		# client knows when it has unsaved changes
@@ -47,29 +48,33 @@ capabilities = {
     "optional-gui" : True,	# client has an optional GUI
     }
 
+# Load client & parse config file
 def myLoadFunction(pathBeginning, clientId):
+    # Make sure we're setting these global variables
+    global session_name
+    global configfile
+    global endbar
+    global nextsong
+
     # TODO: If config file doesn't exist, create one
-    # TODO: If config file is invalid, send an error message and abort
-    # TODO: Make sure using globals actually makes sense here!
+    # TODO: If config file is invalid or list a non existent session,
+    # TODO: report an error message to nsmd & show GUI (can I do both without a subprocess?)
 
     sessionpath = os.path.split(pathBeginning)[0]   # Strips out the serialized directory name since we can only have one instance
-    config = configparser.ConfigParser()
-    config.sections()
-
+    session_name = nsmclient.states.prettyNSMName
     print()
-    print("-------- LOAD CONFIG DEBUG SECTION --------")
-    print("LOAD:  Session Name (prettyNSMName) = ", nsmclient.states.prettyNSMName)
+    print("LOAD:  Session Name: ", nsmclient.states.prettyNSMName)
+    print("LOAD:  Client ID = ", nsmclient.states.clientId)
     print("LOAD:  pathBeginning = ", pathBeginning)
     print("LOAD:  sessionpath is = ", sessionpath)
     pathBeginning = sessionpath
     print()
 
-    # Read config, and make sure we're setting the global variables
-    global configfile
-    global endbar
-    global nextsong
+    # Read config
+    config = configparser.ConfigParser()
+    config.sections()
     configfile = (pathBeginning + "/chronotrigger.conf")
-    print("OPEN:  Opening = ", configfile)
+    print("OPEN:  Opening:", configfile)
     config.read(configfile)
     endbar = int(config['NEXTSONG']['endbar'])
     print("OPEN: endbar = ", endbar)
@@ -98,29 +103,25 @@ requiredFunctions = {
     }
 
 def quitty():
+    ourNsmClient.updateProgress(0.1)
     ourNsmClient.sendStatusMessage("Preparing to quit. Wait for progress to finish")
     print()
     print("Song is over.")
     print("Disconnecting from JACK")
-
     client.deactivate()
-    client.close()
-
-    print("Closing session and loading next song '", nextsong, "' NOW!")
-
-    message = liblo.Message("/nsm/server/open", nextsong)
-    print(message)
-    liblo.send(NSM_URL, message)
-
-    # Fake quit process
-    ourNsmClient.updateProgress(0.1)
-    sleep(0.5)
     ourNsmClient.updateProgress(0.5)
-    sleep(0.5)
-    ourNsmClient.updateProgress(0.9)
+    client.close()
+    ourNsmClient.updateProgress(0.7)
+    if bar >= endbar:
+        switch_to_next_song()
     ourNsmClient.updateProgress(1.0)
     return True
 
+def switch_to_next_song():
+    print("Closing session and loading next song '", nextsong, "' NOW!")
+    message = liblo.Message("/nsm/server/open", nextsong)
+    print(message)
+    liblo.send(NSM_URL, message)
 
 optionalFunctions = {
         "function_quit" : quitty,   # Accept zero parameters. Return True or False
@@ -130,7 +131,7 @@ optionalFunctions = {
         }
 
 
-# [[[[[ NSM CLIENT SECTION ]]]]] -------------------------------------
+# [[[[[ START PROGRAM ]]]]] -------------------------------------
 ourNsmClient, process = nsmclient.init(prettyName = "ChronoTrigger", capabilities = capabilities, requiredFunctions = requiredFunctions, optionalFunctions = optionalFunctions,  sleepValueMs = 100)
 # Direct send only functions for your program.
 # ourNsmClient.updateProgress(value from 0.1 to 1.0) #give percentage during load, save and other heavy operations
@@ -139,19 +140,20 @@ process()
 
 
 # THIS IS WHERE THE ACTUAL FUNCTIONAL CODE OF THE PROGRAM GOES! ----------------------
-print("BEGINNING THE THING: Does this ever happen?")
+print("\nSTART: Connecting to JACK server")
 # Connect to JACK server
-client = jack.Client("chronotrigger")
+client = jack.Client(nsmclient.states.clientId)
 client.activate()
+print("START: Connected to JACK as:" + client.name)
 
 # Go to the beginning of the song
-jack.Client.transport_locate(client, 1)
 bar = 1
+jack.Client.transport_locate(client, bar)
 print("________________________________________________")
 print("Transport state is: ", client.transport_state)
 print("=) Current song position: Bar ", bar)
 print("=) Song ends at bar ", endbar)
-print("=) Switching to next song '", nextsong, "' in ", (endbar - bar), "bars")
+gprint("=) Switching to next song '", nextsong, "' in ", (endbar - bar), "bars")
 
 # Give clients a chance to load
 # TODO: Query nsmd to get all_clients_are_loaded = True instead (if running under NSM)
@@ -183,6 +185,8 @@ while bar < endbar:
 quitty()
 
 
-def chrono_trigger():
-    print("CHRONO TRIGGER: Does this ever happen?")
-
+def switch_to_next_song():
+    print("Closing session and loading next song '", nextsong, "' NOW!")
+    message = liblo.Message("/nsm/server/open", nextsong)
+    print(message)
+    liblo.send(NSM_URL, message)
