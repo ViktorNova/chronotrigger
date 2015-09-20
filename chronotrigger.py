@@ -2,14 +2,19 @@
 # Switch to the next song in NSM when Jack transport reaches a certain point
 # __author__ = 'Viktor Nova'
 # from _ast import arg
+from _ast import excepthandler
+# from sys import stdout
 
 import os
 
-# for debuging - uncomment the os.environ line and
-# change the value to your current NSM url.
-# This changes each time nsmd is launched, you can find it out by adding xterm to your session, then running "echo $NSM_URL"
-from sys import stdout
-os.environ["NSM_URL"] = "osc.udp://datakTARR:11635/"
+# for debuging - uncomment the os.environ line
+# and change the value to your current NSM url.
+# This changes each time nsmd is launched, you
+# can find it out by adding xterm to your session,
+# then running "echo $NSM_URL"
+# import sys
+
+#os.environ["NSM_URL"] = "osc.udp://datakTARR:16175/"
 
 
 NSM_URL = os.getenv('NSM_URL')
@@ -29,8 +34,8 @@ import liblo
 import nsmclient            # Local copy from latest git master: https://raw.githubusercontent.com/nilsgey/pynsmclient/master/nsmclient.py
 import jack                 # Local copy from latest git master: https://raw.githubusercontent.com/spatialaudio/jackclient-python/master/jack.py
 import configparser
-import sys
 from time import sleep
+import subprocess
 
 # Global variables
 session_name    = None
@@ -57,7 +62,7 @@ def myLoadFunction(pathBeginning, clientId):
     global nextsong
 
     # TODO: If config file doesn't exist, create one
-    # TODO: If config file is invalid or list a non existent session,
+    # TODO: If config file is invalid or list a non existant session,
     # TODO: report an error message to nsmd & show GUI (can I do both without a subprocess?)
 
     sessionpath = os.path.split(pathBeginning)[0]   # Strips out the serialized directory name since we can only have one instance
@@ -74,12 +79,18 @@ def myLoadFunction(pathBeginning, clientId):
     config = configparser.ConfigParser()
     config.sections()
     configfile = (pathBeginning + "/chronotrigger.conf")
+    if not os.path.isfile(configfile):
+        new_config()
     print("OPEN:  Opening:", configfile)
     config.read(configfile)
     endbar = int(config['NEXTSONG']['endbar'])
     print("OPEN: endbar = ", endbar)
     nextsong = config['NEXTSONG']['nextsong']
     return True, "chronotrigger.conf"
+
+def new_config():
+    # TODO: Create a default config so we can't get errors forever
+    showGui()
 
 def mySaveFunction(pathBeginning):
     print("-------- SAVE  DEBUG SECTION --------")
@@ -101,6 +112,11 @@ requiredFunctions = {
     "function_open" : myLoadFunction,  # Accept two parameters. Return two values. A bool and a status string. Otherwise you'll get a message that does not help at all: "Exception TypeError: "'NoneType' object is not iterable" in 'liblo._callback' ignored"
     "function_save" : mySaveFunction,  # Accept one parameter. Return two values. A bool and a status string. Otherwise you'll get a message that does not help at all: "Exception TypeError: "'NoneType' object is not iterable" in 'liblo._callback' ignored"
     }
+
+def showGui():
+    gui_process = subprocess.Popen(["xdgopen", configfile],
+        stdout=subprocess.PIPE,
+        preexec_fn=os.setsid)
 
 def quitty():
     ourNsmClient.updateProgress(0.1)
@@ -139,8 +155,9 @@ ourNsmClient, process = nsmclient.init(prettyName = "ChronoTrigger", capabilitie
 process()
 
 
-# THIS IS WHERE THE ACTUAL FUNCTIONAL CODE OF THE PROGRAM GOES! ----------------------
+# THIS IS WHERE THE ACTUAL FUNCTIONAL CODE OF THE PROGRAM RUNS! ----------------------
 print("\nSTART: Connecting to JACK server")
+sleep(2)
 # Connect to JACK server
 client = jack.Client(nsmclient.states.clientId)
 client.activate()
@@ -153,11 +170,11 @@ print("________________________________________________")
 print("Transport state is: ", client.transport_state)
 print("=) Current song position: Bar ", bar)
 print("=) Song ends at bar ", endbar)
-gprint("=) Switching to next song '", nextsong, "' in ", (endbar - bar), "bars")
+print("=) Switching to next song '", nextsong, "' in ", (endbar - bar), "bars")
 
 # Give clients a chance to load
 # TODO: Query nsmd to get all_clients_are_loaded = True instead (if running under NSM)
-sleep(5)
+sleep(1)
 
 
 # Start the transport
