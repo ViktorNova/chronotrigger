@@ -12,9 +12,9 @@ import os
 # This changes each time nsmd is launched, you
 # can find it out by adding xterm to your session,
 # then running "echo $NSM_URL"
-# import sys
 
-#os.environ["NSM_URL"] = "osc.udp://datakTARR:16175/"
+import sys
+os.environ["NSM_URL"] = "osc.udp://datakTARR:16175/"
 
 
 NSM_URL = os.getenv('NSM_URL')
@@ -37,7 +37,7 @@ import configparser
 from time import sleep
 import subprocess
 
-# Global variables
+# Global variable declarations
 session_name    = None
 configfile      = None
 bar             = None
@@ -50,7 +50,7 @@ capabilities = {
     "dirty" : False, 		# client knows when it has unsaved changes
     "progress" : True,		# client can send progress updates during time-consuming operations
     "message" : True, 		# client can send textual status updates
-    "optional-gui" : True,	# client has an optional GUI
+    "optional-gui" : True	# client has an optional GUI
     }
 
 # Load client & parse config file
@@ -114,9 +114,14 @@ requiredFunctions = {
     }
 
 def showGui():
-    gui_process = subprocess.Popen(["xdgopen", configfile],
-        stdout=subprocess.PIPE,
-        preexec_fn=os.setsid)
+    print("Showing GUI...")
+    #gui_process = subprocess.Popen(["xdgopen", configfile],
+    #    stdout=subprocess.PIPE,
+    #    preexec_fn=os.setsid)
+    #import aiohttp
+    import webview
+    webview.create_window("ChronoTrigger", "http://localhost")
+
 
 def quitty():
     ourNsmClient.updateProgress(0.1)
@@ -139,10 +144,11 @@ def switch_to_next_song():
     print(message)
     liblo.send(NSM_URL, message)
 
+# These section define what functions get called when the corresponding event happens
 optionalFunctions = {
-        "function_quit" : quitty,   # Accept zero parameters. Return True or False
-        "function_showGui" : None,  # Accept zero parameters. Return True or False
-        "function_hideGui" : None,  # Accept zero parameters. Return True or False
+        "function_quit" : quitty,         # Accept zero parameters. Return True or False
+        "function_showGui" : showGui,     # Accept zero parameters. Return True or False
+        "function_hideGui" : None,          # Accept zero parameters. Return True or False
         "function_sessionIsLoaded" : None,  # No return value needed.
         }
 
