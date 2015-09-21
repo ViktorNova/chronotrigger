@@ -228,6 +228,8 @@ class OurNsmClient(object):
             liblo.send(states.nsmUrl, "/nsm/client/gui_is_shown")
         else:
             pass # TODO: send general error?
+            print("Error: your client doesn't support optional GUI")
+
 
     def hideGui(self, *args):
         """Only execute if the server has the capabilities to handle
