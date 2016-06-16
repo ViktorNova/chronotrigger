@@ -14,7 +14,8 @@ import os
 # then running "echo $NSM_URL"
 
 import sys
-os.environ["NSM_URL"] = "osc.udp://datakTARR:16175/"
+# The following line is for testing. Uncomment and change to the address of your nsmd server for testing
+#os.environ["NSM_URL"] = "osc.udp://localhost:16175/"
 
 
 NSM_URL = os.getenv('NSM_URL')
