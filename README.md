@@ -4,11 +4,11 @@ NSM utility to automatically switch to the next song in your set list when JACK 
 
 
 ##Credits
-chronotrigger uses these rad Python modules 
- -*pynsmclient*
- https://github.com/nilsgey/pynsmclient
- -*jack-client* 
- https://pypi.python.org/pypi/JACK-Client/
+chronotrigger uses these rad Python modules:
+ - *pynsmclient*
+   https://github.com/nilsgey/pynsmclient
+ - *jack-client* 
+   https://pypi.python.org/pypi/JACK-Client/
  
 ##Requirements
  - Python 3 
