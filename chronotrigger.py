@@ -119,9 +119,7 @@ def showGui():
     #gui_process = subprocess.Popen(["xdgopen", configfile],
     #    stdout=subprocess.PIPE,
     #    preexec_fn=os.setsid)
-    #import aiohttp
-    import webview
-    webview.create_window("ChronoTrigger", "http://localhost")
+
 
 
 def quitty():
@@ -190,19 +188,25 @@ jack.Client.transport_start(client)
 print("\033[F" + "                      " + "\033[F") # Clear out that last line
     # Wait for the song to end
 while bar < endbar:
+    # Sleep for a second to allow the sequencer to start
+    sleep(1)
 
-    # Print everything for the hell of it
+
     transport = client.transport_query()
     bar = transport[1]['bar']
-    # print("Full JACK Transport Status: ", transport)
-    status = client.transport_state
-    print("\033[F" + "\033[F" + "\033[F" + "\033[F" + "\033[F") # Go 4 lines up
-    print("Transport state is: ", status)
-    print("Current song position: Bar ", bar, "               ")
-    print("Song ends at bar ", endbar, "                      ")
-    print("Switching to next song '", nextsong, "' in ", (endbar - bar), "bars           ")
 
-    sleep(1)
+    # THIS SECTION IS FOR DEBUGGING.
+    # It should be commented out since this is not generally run in the terminal.
+    # TODO: show this stuff in the GUI when it exists.
+    print("Full JACK Transport Status: ", transport)
+
+    # status = client.transport_state
+    # print("\033[F" + "\033[F" + "\033[F" + "\033[F" + "\033[F") # Go 4 lines up. (This is a dumb way to do it and doesn't work in all terminals)
+    # print("Transport state is: ", status)
+    # print("Current song position: Bar ", bar, "               ")
+    # print("Song ends at bar ", endbar, "                      ")
+    # print("Switching to next song '", nextsong, "' in ", (endbar - bar), "bars           ")
+
 
 
 # Clean up and exit because the song is now over. TODO: Make this trigger on KILL and HUP as well
