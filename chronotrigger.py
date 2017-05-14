@@ -15,7 +15,7 @@ import os
 
 import sys
 # The following line is for testing. Uncomment and change to the address of your nsmd server for testing
-#os.environ["NSM_URL"] = "osc.udp://localhost:16175/"
+os.environ["NSM_URL"] = "osc.udp://localhost:17274/"
 
 
 NSM_URL = os.getenv('NSM_URL')
@@ -47,11 +47,12 @@ nextsong        = None
 
 # NSM client capabilities
 capabilities = {
-    "switch" : False,		# client is capable of responding to multiple `open` messages without restarting
-    "dirty" : False, 		# client knows when it has unsaved changes
-    "progress" : True,		# client can send progress updates during time-consuming operations
-    "message" : True, 		# client can send textual status updates
-    "optional-gui" : True	# client has an optional GUI
+    "switch" : False,		    # client is capable of responding to multiple `open` messages without restarting
+    "dirty" : False, 		    # client knows when it has unsaved changes
+    "progress" : True,		    # client can send progress updates during time-consuming operations
+    "message" : True, 		    # client can send textual status updates
+    "optional-gui" : True,      # client has an optional GUI
+    "server-control" : True     # client can control the NSM server
     }
 
 # Load client & parse config file
@@ -65,7 +66,7 @@ def myLoadFunction(pathBeginning, clientId):
     # TODO: If config file doesn't exist, create one
     # TODO: If config file is invalid or list a non existant session,
     # TODO: report an error message to nsmd & show GUI (can I do both without a subprocess?)
-
+    # TODO: Get rid of some of this crap
     sessionpath = os.path.split(pathBeginning)[0]   # Strips out the serialized directory name since we can only have one instance
     session_name = nsmclient.states.prettyNSMName
     print()
@@ -76,22 +77,26 @@ def myLoadFunction(pathBeginning, clientId):
     pathBeginning = sessionpath
     print()
 
-    # Read config
+    # Read this song's config
     config = configparser.ConfigParser()
     config.sections()
     configfile = (pathBeginning + "/chronotrigger.conf")
-    if not os.path.isfile(configfile):
-        new_config()
+    if not os.path.isfile(configfile): # TODO: Create a default config so we can't get errors
+        print('Config file not found. Generating a new one at ', configfile )
+        config.add_section('SONG')
+        config.set('SONG', 'endbar', '9999999')
+        with open( configfile, 'w') as newConfig:
+            config.write(newConfig)
+        # TODO: Launch the GUI to allow configuration
+        # showGui()
     print("OPEN:  Opening:", configfile)
     config.read(configfile)
-    endbar = int(config['NEXTSONG']['endbar'])
+
+    endbar = int(config['SONG']['endbar'])
     print("OPEN: endbar = ", endbar)
-    nextsong = config['NEXTSONG']['nextsong']
+    # nextsong = config['SONG']['nextsong']
     return True, "chronotrigger.conf"
 
-def new_config():
-    # TODO: Create a default config so we can't get errors forever
-    showGui()
 
 def mySaveFunction(pathBeginning):
     print("-------- SAVE  DEBUG SECTION --------")
@@ -189,9 +194,8 @@ print("\033[F" + "                      " + "\033[F") # Clear out that last line
     # Wait for the song to end
 while bar < endbar:
     # Sleep for a second to allow the sequencer to start
+    # TODO: wait for sequencer to start instead of failing right here if "bar" does not exist yet
     sleep(1)
-
-
     transport = client.transport_query()
     bar = transport[1]['bar']
 
