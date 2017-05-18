@@ -15,7 +15,7 @@ import os
 
 import sys
 # The following line is for testing. Uncomment and change to the address of your nsmd server for testing
-os.environ["NSM_URL"] = "osc.udp://localhost:17274/"
+# os.environ["NSM_URL"] = "osc.udp://localhost:17274/"
 
 
 NSM_URL = os.getenv('NSM_URL')
@@ -32,7 +32,7 @@ print("NSM Daemon found at ", NSM_URL)
 # args = parser.parse_args()
 
 import liblo
-import nsmclient            # Local copy from latest git master: https://raw.githubusercontent.com/nilsgey/pynsmclient/master/nsmclient.py
+import nsmclient1Deprecated as nsmclient           # Local copy from latest git master: https://raw.githubusercontent.com/nilsgey/pynsmclient/master/nsmclient.py
 import jack                 # Local copy from latest git master: https://raw.githubusercontent.com/spatialaudio/jackclient-python/master/jack.py
 import configparser
 from time import sleep
@@ -40,7 +40,7 @@ import subprocess
 
 # Global variable declarations
 session_name    = None
-configfile      = None
+configFile      = None
 bar             = None
 endbar          = None
 nextsong        = None
@@ -59,7 +59,7 @@ capabilities = {
 def myLoadFunction(pathBeginning, clientId):
     # Make sure we're setting these global variables
     global session_name
-    global configfile
+    global configFile
     global endbar
     global nextsong
 
@@ -77,42 +77,58 @@ def myLoadFunction(pathBeginning, clientId):
     pathBeginning = sessionpath
     print()
 
-    # Read this song's config
+    # READ THIS SONG'S CONFIG FILE
     config = configparser.ConfigParser()
     config.sections()
-    configfile = (pathBeginning + "/chronotrigger.conf")
-    if not os.path.isfile(configfile): # TODO: Create a default config so we can't get errors
-        print('Config file not found. Generating a new one at ', configfile )
+    configFile = (pathBeginning + "/chronotrigger.conf")
+    if not os.path.isfile(configFile): # TODO: Create a default config so we can't get errors
+        print('Config file not found. Generating a new one at ', configFile)
         config.add_section('SONG')
         config.set('SONG', 'endbar', '9999999')
-        with open( configfile, 'w') as newConfig:
+        with open(configFile, 'w') as newConfig:
             config.write(newConfig)
-        # TODO: Launch the GUI to allow configuration
-        # showGui()
-    print("OPEN:  Opening:", configfile)
-    config.read(configfile)
+            # TODO: Launch the GUI to allow configuration
+            # showGui()
+    else:
+        print("OPEN:  Opening:", configFile)
+        config.read(configFile)
 
     endbar = int(config['SONG']['endbar'])
     print("OPEN: endbar = ", endbar)
+    # TODO: Uncomment this once I make a better NSM client that can show this message to the user
+    # infoMessage = liblo.Message("/nsm/client/message", "i:0 s:" + str(endbar))
+    # liblo.send(NSM_URL, infoMessage)
+
+    # READ GLOBAL SETLIST CONFIG FILE
+    # TODO: Using XDG_CONFIG_HOME probably breaks this on Mac OS. Do an OS check and use ~/Library/Preferences/ if OSX
+    setlistConfigFile = (os.getenv('XDG_CONFIG_HOME') + "/SETLIST.conf")
+    if not os.path.isfile(setlistConfigFile): # TODO: Create a default config so we can't get errors
+        print('Config file not found. Generating a new one at ', setlistConfigFile)
+        config.add_section('ACTIVE')
+        config.add_section('INACTIVE')
+        config.set('INACTIVE', 'Note', 'You can use the inactive section to store multiple setlists if you want. Everything not in the [ACTIVE] section will be ignored')
+
+        # TODO: Query /nsm/server/list and save its responses as a list. Then write that into the config file
+
+        with open(setlistConfigFile, 'w') as newConfig:
+            config.write(newConfig)
+            # TODO: Launch the GUI to allow configuration
+            # showGui()
+    else:
+        print("OPEN:  Opening:", configFile)
+        config.read(configFile)
+
     # nextsong = config['SONG']['nextsong']
+
+
+
     return True, "chronotrigger.conf"
 
-
-def mySaveFunction(pathBeginning):
-    print("-------- SAVE  DEBUG SECTION --------")
-    """Pretend to save a file"""
-    print("SAVE: In the Save function, pathBeginning = ", pathBeginning)
-    # Strip out the serialized suffix
-    pathBeginning = os.path.split(pathBeginning)[0]
-    print("SAVE: so I override it again", pathBeginning)
-    print("SAVE: Did that work?")
-    if True:
-        return False, " ".join(["/".join([pathBeginning, "chronotrigger.conf"]), "has failed to save because an RNG went wrong"])
-    else:
-        return True, "chronotrigger.conf"
-        # TODO: Get user options and save it
-        # https://docs.python.org/3/library/configparser.html
-
+def mySaveFunction():
+    # TODO: This never gets called when you click save, for some reason. Not the end of the world for now
+    message = liblo.Message("/nsm/client/message", "i:0 s:You must open the GUI to save changes")
+    print(message)
+    liblo.send(NSM_URL, message)
 
 requiredFunctions = {
     "function_open" : myLoadFunction,  # Accept two parameters. Return two values. A bool and a status string. Otherwise you'll get a message that does not help at all: "Exception TypeError: "'NoneType' object is not iterable" in 'liblo._callback' ignored"
@@ -120,11 +136,15 @@ requiredFunctions = {
     }
 
 def showGui():
-    print("Showing GUI...")
-    #gui_process = subprocess.Popen(["xdgopen", configfile],
-    #    stdout=subprocess.PIPE,
-    #    preexec_fn=os.setsid)
-
+    try:
+        configFile
+    except NameError:
+        print("Not showing the GUI yet")
+    else:
+        print("Showing GUI...")
+        gui_process = subprocess.Popen(["xdg-open", str(configFile)],
+            stdout=subprocess.PIPE,
+            preexec_fn=os.setsid)
 
 
 def quitty():
