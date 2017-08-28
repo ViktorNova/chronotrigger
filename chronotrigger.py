@@ -40,7 +40,7 @@ import subprocess
 
 # Global variable declarations
 session_name    = None
-configFile      = None
+songConfigFile      = None
 bar             = None
 endbar          = None
 nextsong        = None
@@ -59,7 +59,7 @@ capabilities = {
 def myLoadFunction(pathBeginning, clientId):
     # Make sure we're setting these global variables
     global session_name
-    global configFile
+    global songConfigFile
     global endbar
     global nextsong
 
@@ -137,14 +137,14 @@ requiredFunctions = {
 
 def showGui():
     try:
-        configFile
+        songConfigFile
     except NameError:
         print("Not showing the GUI yet")
     else:
         print("Showing GUI...")
-        gui_process = subprocess.Popen(["xdg-open", str(configFile)],
-            stdout=subprocess.PIPE,
-            preexec_fn=os.setsid)
+        gui_process = subprocess.Popen(["xdg-open", str(songConfigFile)],
+                                       stdout=subprocess.PIPE,
+                                       preexec_fn=os.setsid)
 
 
 def quitty():
