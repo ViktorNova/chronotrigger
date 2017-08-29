@@ -1,42 +1,29 @@
 #!/usr/bin/env python3
-# Switch to the next song in NSM when Jack transport reaches a certain point
-# __author__ = 'Viktor Nova'
-# from _ast import arg
-from _ast import excepthandler
-# from sys import stdout
-
-import os
-
-# for debuging - uncomment the os.environ line
-# and change the value to your current NSM url.
-# This changes each time nsmd is launched, you
-# can find it out by adding xterm to your session,
-# then running "echo $NSM_URL"
+# -*- coding: utf-8 -*-
 
 import sys
-# The following line is for testing. Uncomment and change to the address of your nsmd server for testing
-# os.environ["NSM_URL"] = "osc.udp://localhost:17274/"
-
-
-NSM_URL = os.getenv('NSM_URL')
-if not NSM_URL:
-    print("NSM_URL is not set, not running inside Non Session Manager, exiting")
-    sys.exit()
-print("NSM Daemon found at ", NSM_URL)
-
-# TODO: Make this work outside NSM with arguments and an arbitrary OSC message/receiver
-# import argparse
-# parser = argparse.ArgumentParser()
-# parser.add_argument("endbar")   # First argument (# Bar where song ends. When JACK transport reaches this bar, the song is considered to be over, and we will switch sessions and load the next song)
-# parser.add_argument("nextsong") # Second argument  (Name of the song we will automatically switch to when this song is finished)
-# args = parser.parse_args()
-
-import liblo
-import nsmclient1Deprecated as nsmclient           # Local copy from latest git master: https://raw.githubusercontent.com/nilsgey/pynsmclient/master/nsmclient.py
 import jack                 # Local copy from latest git master: https://raw.githubusercontent.com/spatialaudio/jackclient-python/master/jack.py
 import configparser
 from time import sleep
 import subprocess
+import os                   # TODO: Import only the parts of OS we actually need
+import liblo                # This is a dirty hack and redundant. DO it the right way
+
+
+
+# nsm only
+from nsmclient import NSMClient     # will raise an error and exit if this example is not run from NSM.
+
+########################################################################
+# General
+########################################################################
+niceTitle = "chronotrigger2"            # This is the name of your program. This will display in NSM and can be used in your save file
+
+# Global variable declarations
+songConfigFile      = None
+bar             = None
+endbar          = None
+nextsong        = None
 
 # Global variable declarations
 session_name    = None
@@ -45,97 +32,139 @@ bar             = None
 endbar          = None
 nextsong        = None
 
-# NSM client capabilities
-capabilities = {
-    "switch" : False,		    # client is capable of responding to multiple `open` messages without restarting
-    "dirty" : False, 		    # client knows when it has unsaved changes
-    "progress" : True,		    # client can send progress updates during time-consuming operations
-    "message" : True, 		    # client can send textual status updates
-    "optional-gui" : True,      # client has an optional GUI
-    "server-control" : True     # client can control the NSM server
-    }
+########################################################################
+# Prepare the NSM Client
+# This has to be done as the first thing because NSM needs to get the paths
+# and may quit if NSM environment var was not found.
+#
+# This is also where to set up your functions that react to messages from NSM,
+########################################################################
+# Here are some variables you can use:
+# ourPath               = Full path to your NSM save file/directory with serialized NSM extension
+# ourClientNameUnderNSM = Your NSM save file/directory with serialized NSM extension and no path information
+# sessionName           = The name of your session with no path information
+########################################################################
 
-# Load client & parse config file
-def myLoadFunction(pathBeginning, clientId):
+
+def saveCallback(ourPath, sessionName, ourClientNameUnderNSM):
+    # TODO: Send this to the NSM server
+    message = ("/nsm/client/message", "i:0 s:NSM save commands are ignored. You must open the GUI to save changes")
+    print(message)
+
+
+def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
     # Make sure we're setting these global variables
-    global session_name
     global songConfigFile
     global endbar
     global nextsong
 
-    # TODO: If config file doesn't exist, create one
     # TODO: If config file is invalid or list a non existant session,
     # TODO: report an error message to nsmd & show GUI (can I do both without a subprocess?)
-    # TODO: Get rid of some of this crap
-    sessionpath = os.path.split(pathBeginning)[0]   # Strips out the serialized directory name since we can only have one instance
-    session_name = nsmclient.states.prettyNSMName
+    # TODO: Get rid of some of this printy crap
+    sessionpath = os.path.split(ourPath)[0]   # Strips out the serialized directory name since we can only have one instance
     print()
-    print("LOAD:  Session Name: ", nsmclient.states.prettyNSMName)
-    print("LOAD:  Client ID = ", nsmclient.states.clientId)
-    print("LOAD:  pathBeginning = ", pathBeginning)
+    print("LOAD:  Session Name: ", sessionName)
+    print("LOAD:  Client ID = ", ourClientNameUnderNSM)
+    print("LOAD:  ourPath = ", ourPath)
     print("LOAD:  sessionpath is = ", sessionpath)
-    pathBeginning = sessionpath
+    ourPath = sessionpath
     print()
 
     # READ THIS SONG'S CONFIG FILE
-    config = configparser.ConfigParser()
-    config.sections()
-    configFile = (pathBeginning + "/chronotrigger.conf")
-    if not os.path.isfile(configFile): # TODO: Create a default config so we can't get errors
-        print('Config file not found. Generating a new one at ', configFile)
-        config.add_section('SONG')
-        config.set('SONG', 'endbar', '9999999')
-        with open(configFile, 'w') as newConfig:
-            config.write(newConfig)
+    songConfig = configparser.ConfigParser()
+    songConfig.sections()
+    songConfigFile = (ourPath + "/chronotrigger.conf")
+    if not os.path.isfile(songConfigFile): # TODO: Change this to a try/except
+        print('Config file not found. Generating a new one at ', songConfigFile)
+        songConfig.add_section('SONG')
+        songConfig.set('SONG', 'endbar', '9999999')
+        with open(songConfigFile, 'w') as newSongConfig:
+            songConfig.write(newSongConfig)
             # TODO: Launch the GUI to allow configuration
             # showGui()
     else:
-        print("OPEN:  Opening:", configFile)
-        config.read(configFile)
+        print("OPEN:  Opening:", songConfigFile)
+        songConfig.read(songConfigFile)
 
-    endbar = int(config['SONG']['endbar'])
+    endbar = int(songConfig['SONG']['endbar'])
     print("OPEN: endbar = ", endbar)
     # TODO: Uncomment this once I make a better NSM client that can show this message to the user
     # infoMessage = liblo.Message("/nsm/client/message", "i:0 s:" + str(endbar))
     # liblo.send(NSM_URL, infoMessage)
 
     # READ GLOBAL SETLIST CONFIG FILE
+    setlistConfig = configparser.ConfigParser()
+    songConfig.sections()
     # TODO: Using XDG_CONFIG_HOME probably breaks this on Mac OS. Do an OS check and use ~/Library/Preferences/ if OSX
     setlistConfigFile = (os.getenv('XDG_CONFIG_HOME') + "/SETLIST.conf")
-    if not os.path.isfile(setlistConfigFile): # TODO: Create a default config so we can't get errors
+    if not os.path.isfile(setlistConfigFile): # confTODO: Create a default config so we can't get errors
         print('Config file not found. Generating a new one at ', setlistConfigFile)
-        config.add_section('ACTIVE')
-        config.add_section('INACTIVE')
-        config.set('INACTIVE', 'Note', 'You can use the inactive section to store multiple setlists if you want. Everything not in the [ACTIVE] section will be ignored')
+        setlistConfig.add_section('ACTIVE')
+        setlistConfig.add_section('INACTIVE')
+        setlistConfig.set('INACTIVE', 'Note', 'You can use the inactive section to store multiple setlists if you want. Everything not in the [ACTIVE] section will be ignored')
 
         # TODO: Query /nsm/server/list and save its responses as a list. Then write that into the config file
 
-        with open(setlistConfigFile, 'w') as newConfig:
-            config.write(newConfig)
+        with open(setlistConfigFile, 'w') as newSetlistConfig:
+            setlistConfig.write(newSetlistConfig)
             # TODO: Launch the GUI to allow configuration
             # showGui()
     else:
-        print("OPEN:  Opening:", configFile)
-        config.read(configFile)
+        print("OPEN:  Opening:", setlistConfigFile)
+    # Open global config file
+    setlistConfig.read(setlistConfigFile)
+    print()
+
+    # Read active setlist from config file, split it into a comma-delimited python list, and store that as 'setlist'
+    setlist = setlistConfig['ACTIVE']['setlist'].split(",")
+
+    print("SETLIST: ", setlist)
+    # Figure out what position in the setlist we are currently on
+    songNumber = setlist.index(sessionName)
+    print("Current position in setlist: ", songNumber)
+
+    # TODO: Add an exception if there is no next song. That way this won't crash
+    nextsong = setlist[(songNumber + 1)]
+
+    # TODO
+    print("NEXT SONG: ", nextsong)
 
     # nextsong = config['SONG']['nextsong']
+    # return True, "chronotrigger.conf" # This was from the old way
 
 
+def exitProgram(ourPath, sessionName, ourClientNameUnderNSM):
+    """This function is a callback for NSM.
+    We have a chance to close our clients and open connections here.
+    If not nsmclient will just kill us no matter what
+    """
+    print("\nexitProgram has been called. \n");
+    # Clean up and exit because the song is now over. TODO: Make this trigger on KILL and HUP as well
+    # ourNsmClient.updateProgress(0.1)
+    # TODO: See if nsmclient2 can send messages to the server to announce in the GUI.. this is probably not important at all
+    # ourNsmClient.sendStatusMessage("Preparing to quit. Wait for progress to finish")
+    print("Song is over.")
+    print("Disconnecting from JACK")
+    client.deactivate()
+    # ourNsmClient.updateProgress(0.5)
+    client.close()
+    # ourNsmClient.updateProgress(0.7)
+    if bar >= endbar:
+        switch_to_next_song()
+    # ourNsmClient.updateProgress(1.0)
+    return True
+    # Exit is done by NSM kill.
 
-    return True, "chronotrigger.conf"
 
-def mySaveFunction():
-    # TODO: This never gets called when you click save, for some reason. Not the end of the world for now
-    message = liblo.Message("/nsm/client/message", "i:0 s:You must open the GUI to save changes")
+def switch_to_next_song():
+    print("Closing session and loading next song '", nextsong, "' NOW!")
+    message = liblo.Message("/nsm/server/open", nextsong)
     print(message)
     liblo.send(NSM_URL, message)
 
-requiredFunctions = {
-    "function_open" : myLoadFunction,  # Accept two parameters. Return two values. A bool and a status string. Otherwise you'll get a message that does not help at all: "Exception TypeError: "'NoneType' object is not iterable" in 'liblo._callback' ignored"
-    "function_save" : mySaveFunction,  # Accept one parameter. Return two values. A bool and a status string. Otherwise you'll get a message that does not help at all: "Exception TypeError: "'NoneType' object is not iterable" in 'liblo._callback' ignored"
-    }
 
-def showGui():
+def showGUICallback():
+    # Put your code that shows your GUI in here
     try:
         songConfigFile
     except NameError:
@@ -145,51 +174,54 @@ def showGui():
         gui_process = subprocess.Popen(["xdg-open", str(songConfigFile)],
                                        stdout=subprocess.PIPE,
                                        preexec_fn=os.setsid)
+    nsmClient.announceGuiVisibility(isVisible=True)  # Inform NSM that the GUI is now visible. Put this at the end.
 
 
-def quitty():
-    ourNsmClient.updateProgress(0.1)
-    ourNsmClient.sendStatusMessage("Preparing to quit. Wait for progress to finish")
-    print()
-    print("Song is over.")
-    print("Disconnecting from JACK")
-    client.deactivate()
-    ourNsmClient.updateProgress(0.5)
-    client.close()
-    ourNsmClient.updateProgress(0.7)
-    if bar >= endbar:
-        switch_to_next_song()
-    ourNsmClient.updateProgress(1.0)
-    return True
-
-def switch_to_next_song():
-    print("Closing session and loading next song '", nextsong, "' NOW!")
-    message = liblo.Message("/nsm/server/open", nextsong)
-    print(message)
-    liblo.send(NSM_URL, message)
-
-# These section define what functions get called when the corresponding event happens
-optionalFunctions = {
-        "function_quit" : quitty,         # Accept zero parameters. Return True or False
-        "function_showGui" : showGui,     # Accept zero parameters. Return True or False
-        "function_hideGui" : None,          # Accept zero parameters. Return True or False
-        "function_sessionIsLoaded" : None,  # No return value needed.
-        }
+def hideGUICallback():
+    # Put your code that hides your GUI in here
+    print("hideGUICallback");
+    print("TODO: fix this proper")
+    nsmClient.announceGuiVisibility(isVisible=False)  # Inform NSM that the GUI is now hidden. Put this at the end.
 
 
-# [[[[[ START PROGRAM ]]]]] -------------------------------------
-ourNsmClient, process = nsmclient.init(prettyName = "ChronoTrigger", capabilities = capabilities, requiredFunctions = requiredFunctions, optionalFunctions = optionalFunctions,  sleepValueMs = 100)
-# Direct send only functions for your program.
-# ourNsmClient.updateProgress(value from 0.1 to 1.0) #give percentage during load, save and other heavy operations
-# ourNsmClient.setDirty(True or False) #Inform NSM of the save status. Are there unsaved changes?
-process()
+nsmClient = NSMClient(prettyName = niceTitle,
+                      saveCallback = saveCallback,
+                      openOrNewCallback = openCallback,
+                      showGUICallback = showGUICallback,  # Comment this line out if your program does not have an optional GUI
+                      hideGUICallback = hideGUICallback,  # Comment this line out if your program does not have an optional GUI
+                      supportsSaveStatus = False,         # Change this to True if your program announces it's save status to NSM
+                      exitProgramCallback = exitProgram,
+                      loggingLevel = "info", # "info" for development or debugging, "error" for production. default is error.
+                      )
 
+# If NSM did not start up properly the program quits here.
+
+########################################################################
+# If your project uses JACK, activate your client here
+# You can use jackClientName or create your own
+########################################################################
+jackClientName = nsmClient.ourClientNameUnderNSM
+
+########################################################################
+# Start main program loop.
+########################################################################
+
+# showGUICallback()  # If you want your GUI to be shown by default, uncomment this line
+print("Entering main loop")
+
+# TODO: Get this to be able to send OSC messages to NSM.
+# The next line is a failed attempt, but it should be sort of related
+
+# message = liblo.Message("/nsm/server/open", nextsong)
+
+NSM_URL = 'osc.udp://' + str(nsmClient.nsmOSCUrl[0]) + ':' + str(nsmClient.nsmOSCUrl[1])  + '/'
+print(NSM_URL)
 
 # THIS IS WHERE THE ACTUAL FUNCTIONAL CODE OF THE PROGRAM RUNS! ----------------------
 print("\nSTART: Connecting to JACK server")
-sleep(2)
+sleep(2) # TODO: take these sleeps out once more precautions are in place
 # Connect to JACK server
-client = jack.Client(nsmclient.states.clientId)
+client = jack.Client(nsmClient.ourClientNameUnderNSM)
 client.activate()
 print("START: Connected to JACK as:" + client.name)
 
@@ -214,31 +246,27 @@ print("\033[F" + "                      " + "\033[F") # Clear out that last line
     # Wait for the song to end
 while bar < endbar:
     # Sleep for a second to allow the sequencer to start
-    # TODO: wait for sequencer to start instead of failing right here if "bar" does not exist yet
+    # TODO: instead of sleeping 1 second here, do it on the beat. Could be easily done with some BPM math
     sleep(1)
     transport = client.transport_query()
+    # TODO: change this to try, wait for sequencer to start instead of failing right here if "bar" does not exist yet
     bar = transport[1]['bar']
 
     # THIS SECTION IS FOR DEBUGGING.
     # It should be commented out since this is not generally run in the terminal.
     # TODO: show this stuff in the GUI when it exists.
-    print("Full JACK Transport Status: ", transport)
+    print("Full JACK Transport Status: ", transport, "\n")
 
-    # status = client.transport_state
-    # print("\033[F" + "\033[F" + "\033[F" + "\033[F" + "\033[F") # Go 4 lines up. (This is a dumb way to do it and doesn't work in all terminals)
-    # print("Transport state is: ", status)
-    # print("Current song position: Bar ", bar, "               ")
-    # print("Song ends at bar ", endbar, "                      ")
-    # print("Switching to next song '", nextsong, "' in ", (endbar - bar), "bars           ")
+    print("Transport state is: ", client.transport_state)
+    print("Current song position: Bar ", bar, "               ")
+    print("Song ends at bar ", endbar, "                      ")
+    print("Switching to next song '", nextsong, "' in ", (endbar - bar), "bars \n")
 
+# We have now reached the end of the song, so time to call the exit function
+# which will clean up nicely, then switch to the next song
+exitProgram(nsmClient.ourPath,nsmClient.ourClientNameUnderNSM,nsmClient.sessionName)
 
-
-# Clean up and exit because the song is now over. TODO: Make this trigger on KILL and HUP as well
-quitty()
-
-
-def switch_to_next_song():
-    print("Closing session and loading next song '", nextsong, "' NOW!")
-    message = liblo.Message("/nsm/server/open", nextsong)
-    print(message)
-    liblo.send(NSM_URL, message)
+while True:
+    # nsmClient.announceSaveStatus(False) # Announce your save status (dirty = False / clean = True)
+    nsmClient.reactToMessage()  # Make sure this exists somewhere in your main loop
+    sleep(0.05)
