@@ -97,7 +97,7 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
     songConfig.sections()
     # TODO: Using XDG_CONFIG_HOME probably breaks this on Mac OS. Do an OS check and use ~/Library/Preferences/ if OSX
     setlistConfigFile = (os.getenv('XDG_CONFIG_HOME') + "/SETLIST.conf")
-    if not os.path.isfile(setlistConfigFile): # confTODO: Create a default config so we can't get errors
+    if not os.path.isfile(setlistConfigFile):
         print('Config file not found. Generating a new one at ', setlistConfigFile)
         setlistConfig.add_section('ACTIVE')
         setlistConfig.add_section('INACTIVE')
@@ -121,10 +121,12 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
     print("SETLIST: ", setlist)
     # Figure out what position in the setlist we are currently on
     songNumber = setlist.index(sessionName)
-    print("Current position in setlist: ", songNumber)
-
-    # TODO: Add an exception if there is no next song. That way this won't crash
-    nextsong = setlist[(songNumber + 1)]
+    print("Current position in setlist: ", songNumber, " of ", len(setlist))
+    try:
+        nextsong = setlist[(songNumber + 1)]
+    except IndexError:
+        print("This is the last song of the set.")
+        nextsong = None
 
     # TODO
     print("NEXT SONG: ", nextsong)
