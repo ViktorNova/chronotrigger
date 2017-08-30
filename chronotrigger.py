@@ -27,7 +27,7 @@ nextsong        = None
 
 # Global variable declarations
 session_name    = None
-songConfigFile      = None
+songConfigFile  = None
 bar             = None
 endbar          = None
 nextsong        = None
@@ -167,16 +167,11 @@ def switch_to_next_song():
 
 def showGUICallback():
     # Put your code that shows your GUI in here
-    try:
-        songConfigFile
-    except NameError:
-        print("Not showing the GUI yet")
-    else:
-        print("Showing GUI...")
-        gui_process = subprocess.Popen(["xdg-open", str(songConfigFile)],
-                                       stdout=subprocess.PIPE,
-                                       preexec_fn=os.setsid)
-    nsmClient.announceGuiVisibility(isVisible=True)  # Inform NSM that the GUI is now visible. Put this at the end.
+    print("Showing GUI...")
+    gui_process = subprocess.Popen(["xdg-open", str(songConfigFile)],
+                                   stdout=subprocess.PIPE,
+                                   preexec_fn=os.setsid)
+    # nsmClient.announceGuiVisibility(isVisible=True)  # Inform NSM that the GUI is now visible. Put this at the end.
 
 
 def hideGUICallback():
@@ -247,6 +242,7 @@ jack.Client.transport_start(client)
 print("\033[F" + "                      " + "\033[F") # Clear out that last line
     # Wait for the song to end
 while bar < endbar:
+    nsmClient.reactToMessage()  # Make sure this exists somewhere in your main loop
     # Sleep for a second to allow the sequencer to start
     # TODO: instead of sleeping 1 second here, do it on the beat. Could be easily done with some BPM math
     sleep(1)
@@ -264,11 +260,10 @@ while bar < endbar:
     print("Song ends at bar ", endbar, "                      ")
     print("Switching to next song '", nextsong, "' in ", (endbar - bar), "bars \n")
 
+    # nsmClient.announceSaveStatus(False) # Announce your save status (dirty = False / clean = True)
+
 # We have now reached the end of the song, so time to call the exit function
 # which will clean up nicely, then switch to the next song
 exitProgram(nsmClient.ourPath,nsmClient.ourClientNameUnderNSM,nsmClient.sessionName)
 
-while True:
-    # nsmClient.announceSaveStatus(False) # Announce your save status (dirty = False / clean = True)
-    nsmClient.reactToMessage()  # Make sure this exists somewhere in your main loop
-    sleep(0.05)
+
