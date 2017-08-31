@@ -20,17 +20,11 @@ from nsmclient import NSMClient     # will raise an error and exit if this examp
 niceTitle = "chronotrigger2"            # This is the name of your program. This will display in NSM and can be used in your save file
 
 # Global variable declarations
-songConfigFile      = None
-bar             = None
-endbar          = None
-nextsong        = None
-
-# Global variable declarations
-session_name    = None
 songConfigFile  = None
 bar             = None
 endbar          = None
 nextsong        = None
+
 
 ########################################################################
 # Prepare the NSM Client
@@ -168,16 +162,19 @@ def switch_to_next_song():
 def showGUICallback():
     # Put your code that shows your GUI in here
     print("Showing GUI...")
-    gui_process = subprocess.Popen(["xdg-open", str(songConfigFile)],
-                                   stdout=subprocess.PIPE,
-                                   preexec_fn=os.setsid)
+    # TODO: Open a dedicated GUI to edit the endbar
+    gui_process = subprocess.Popen(["xdg-open", str(songConfigFile)])
+                                   # stdout=subprocess.PIPE,
+                                   # preexec_fn=os.setsid)
+
+    # nsmClient.announceSaveStatus(False) # Announce your save status (dirty = False / clean = True)
     # nsmClient.announceGuiVisibility(isVisible=True)  # Inform NSM that the GUI is now visible. Put this at the end.
 
 
 def hideGUICallback():
     # Put your code that hides your GUI in here
-    print("hideGUICallback");
-    print("TODO: fix this proper")
+    print("Hiding GUI not implemented yet, you have to save and close the text editor yourself.")
+
     nsmClient.announceGuiVisibility(isVisible=False)  # Inform NSM that the GUI is now hidden. Put this at the end.
 
 
@@ -239,28 +236,31 @@ sleep(1)
 # Start the transport
 print("STARTING TRANSPORT...")
 jack.Client.transport_start(client)
-print("\033[F" + "                      " + "\033[F") # Clear out that last line
-    # Wait for the song to end
-while bar < endbar:
+print()
+
+while bar < endbar: # Wait for the song to end
     nsmClient.reactToMessage()  # Make sure this exists somewhere in your main loop
-    # Sleep for a second to allow the sequencer to start
-    # TODO: instead of sleeping 1 second here, do it on the beat. Could be easily done with some BPM math
-    sleep(1)
     transport = client.transport_query()
-    # TODO: change this to try, wait for sequencer to start instead of failing right here if "bar" does not exist yet
-    bar = transport[1]['bar']
+
+    try:
+        bar = transport[1]['bar']
+    except KeyError:
+        print("Waiting for sequencer to start.. \n")
+
+    # Only react to events once per second - this keeps this from consuming lots of CPU
+    sleep(1) # TODO: instead of sleeping 1 second here, do it on the beat. Could be easily done with some BPM math
+
+
 
     # THIS SECTION IS FOR DEBUGGING.
-    # It should be commented out since this is not generally run in the terminal.
+    # It should probably be commented out since this is not generally run in the terminal.
     # TODO: show this stuff in the GUI when it exists.
     print("Full JACK Transport Status: ", transport, "\n")
-
     print("Transport state is: ", client.transport_state)
     print("Current song position: Bar ", bar, "               ")
     print("Song ends at bar ", endbar, "                      ")
     print("Switching to next song '", nextsong, "' in ", (endbar - bar), "bars \n")
 
-    # nsmClient.announceSaveStatus(False) # Announce your save status (dirty = False / clean = True)
 
 # We have now reached the end of the song, so time to call the exit function
 # which will clean up nicely, then switch to the next song
