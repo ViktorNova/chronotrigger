@@ -110,8 +110,12 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
     print()
 
     # Read active setlist from config file, split it into a comma-delimited python list, and store that as 'setlist'
-    setlist = setlistConfig['ACTIVE']['setlist'].split(",")
-
+    # TODO: List the NSM directory and output it in a comma separated list to pre-populate the setlist file
+    try:
+        setlist = setlistConfig['ACTIVE']['setlist'].split(",")
+    except KeyError:
+        print("No set list defined. Generating temporary one (FIX ME) in alphebetical order")
+        setlist = [sessionName]
     print("SETLIST: ", setlist)
     # Figure out what position in the setlist we are currently on
     songNumber = setlist.index(sessionName)
