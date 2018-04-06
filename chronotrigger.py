@@ -92,6 +92,7 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
     # TODO: Using XDG_CONFIG_HOME probably breaks this on Mac OS. Do an OS check and use ~/Library/Preferences/ if OSX
     setlistConfigFile = (os.getenv('XDG_CONFIG_HOME') + "/SETLIST.conf")
     if not os.path.isfile(setlistConfigFile):
+        # TODO: List the NSM directory and output it in a comma separated list to pre-populate the setlist file
         print('Config file not found. Generating a new one at ', setlistConfigFile)
         setlistConfig.add_section('ACTIVE')
         setlistConfig.add_section('INACTIVE')
@@ -110,8 +111,11 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
     print()
 
     # Read active setlist from config file, split it into a comma-delimited python list, and store that as 'setlist'
-    setlist = setlistConfig['ACTIVE']['setlist'].split(",")
-
+    try:
+        setlist = setlistConfig['ACTIVE']['setlist'].split(",")
+    except KeyError:
+        print("No set list defined. Generating temporary one (FIX ME) in alphebetical order")
+        setlist = [sessionName]
     print("SETLIST: ", setlist)
     # Figure out what position in the setlist we are currently on
     songNumber = setlist.index(sessionName)
