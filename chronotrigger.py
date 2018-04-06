@@ -142,12 +142,14 @@ def exitProgram(ourPath, sessionName, ourClientNameUnderNSM):
     print("Song is over.")
     print("Disconnecting from JACK")
     client.deactivate()
-    # ourNsmClient.updateProgress(0.5)
     client.close()
-    # ourNsmClient.updateProgress(0.7)
+
+    if nextsong is None:
+        print("Set list is over. No next song to switch to.")
+        return True
+
     if bar >= endbar:
         switch_to_next_song()
-    # ourNsmClient.updateProgress(1.0)
     return True
     # Exit is done by NSM kill.
 
@@ -162,7 +164,9 @@ def switch_to_next_song():
 def showGUICallback():
     # Put your code that shows your GUI in here
     print("Showing GUI...")
+
     # TODO: Open a dedicated GUI to edit the endbar
+    # TODO: Make the GUI validate 'endbar', the value has to be 1 or greater, or this will finish instantly
     gui_process = subprocess.Popen(["xdg-open", str(songConfigFile)])
                                    # stdout=subprocess.PIPE,
                                    # preexec_fn=os.setsid)
@@ -213,7 +217,7 @@ print(NSM_URL)
 
 # THIS IS WHERE THE ACTUAL FUNCTIONAL CODE OF THE PROGRAM RUNS! ----------------------
 print("\nSTART: Connecting to JACK server")
-sleep(2) # TODO: take these sleeps out once more precautions are in place
+
 # Connect to JACK server
 client = jack.Client(nsmClient.ourClientNameUnderNSM)
 client.activate()
