@@ -89,8 +89,8 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
     # READ GLOBAL SETLIST CONFIG FILE
     setlistConfig = configparser.ConfigParser()
     songConfig.sections()
-    # TODO: Using XDG_CONFIG_HOME probably breaks this on Mac OS. Do an OS check and use ~/Library/Preferences/ if OSX
-    setlistConfigFile = (os.getenv('XDG_CONFIG_HOME') + "/SETLIST.conf")
+    # TODO: This next line is not ideal for Mac OS. Do an OS check and use ~/Library/Preferences/ if OSX
+    setlistConfigFile = (os.environ.get('HOME') + '/.config/SETLIST.conf')
     if not os.path.isfile(setlistConfigFile):
         # TODO: List the NSM directory and output it in a comma separated list to pre-populate the setlist file
         print('Config file not found. Generating a new one at ', setlistConfigFile)
