@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
+# TODO: Don't import JACK unless we're using JACK transport
 import jack                 # Local copy from latest git master: https://raw.githubusercontent.com/spatialaudio/jackclient-python/master/jack.py
 import configparser
 from time import sleep
@@ -20,10 +21,17 @@ from nsmclient import NSMClient     # will raise an error and exit if this examp
 niceTitle = "chronotrigger2"            # This is the name of your program. This will display in NSM and can be used in your save file
 
 # Global variable declarations
-songConfigFile  = None
-bar             = None
-endbar          = None
-nextsong        = None
+songConfigFile      = None
+bar                 = None
+endbar              = None
+nextsong            = None
+transportProtocol   = None
+inport              = None
+outport             = None
+play                = None
+playValue           = None
+rewind              = None
+rewindValue         = None
 
 
 ########################################################################
@@ -51,6 +59,14 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
     global songConfigFile
     global endbar
     global nextsong
+    global transportProtocol
+    global inport
+    global outport
+    global play
+    global playValue
+    global rewind
+    global rewindValue
+
 
     # TODO: If config file is invalid or list a non existant session,
     # TODO: report an error message to nsmd & show GUI (can I do both without a subprocess?)
@@ -87,7 +103,7 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
     # liblo.send(NSM_URL, infoMessage)
 
     # READ GLOBAL SETLIST CONFIG FILE
-    setlistConfig = configparser.ConfigParser()
+    setlistConfig = configparser.ConfigParser(allow_no_value=True)
     songConfig.sections()
     # TODO: This next line is not ideal for Mac OS. Do an OS check and use ~/Library/Preferences/ if OSX
     setlistConfigFile = (os.environ.get('HOME') + '/.config/SETLIST.conf')
@@ -96,11 +112,24 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
         print('Config file not found. Generating a new one at ', setlistConfigFile)
         setlistConfig.add_section('ACTIVE')
         setlistConfig.add_section('INACTIVE')
-        setlistConfig.set('INACTIVE', 'Note', 'You can use the inactive section to store multiple setlists if you want. Everything not in the [ACTIVE] section will be ignored')
+        setlistConfig.set('INACTIVE', '# You can use the inactive section to store multiple setlists if you want.')
+        setlistConfig.add_section('ENGINE')
+        setlistConfig.set('ENGINE', '# Transport can be either osc or jack')
+        setlistConfig.set('ENGINE', 'transport', 'jack')
+        setlistConfig.add_section('OSC')
+        setlistConfig.set('OSC', '# Define your custom OSC commands here')
+        setlistConfig.set('OSC', 'play', '/play')
+        setlistConfig.set('OSC', 'inport', '9000')
+        setlistConfig.set('OSC', 'outport', '8000')
+        setlistConfig.set('OSC', 'playValue', '1')
+        setlistConfig.set('OSC', 'rewind', '/time')
+        setlistConfig.set('OSC', 'rewindValue', '0')
+        setlistConfig.set('OSC', 'songPosition', '/beat/str')
 
         # TODO: Query /nsm/server/list and save its responses as a list. Then write that into the config file
 
         with open(setlistConfigFile, 'w') as newSetlistConfig:
+            print("No global config file found. Creating one at ", setlistConfigFile)
             setlistConfig.write(newSetlistConfig)
             # TODO: Launch the GUI to allow configuration
             # showGui()
@@ -115,7 +144,7 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
         setlist = setlistConfig['ACTIVE']['setlist'].split(",")
     except KeyError:
         print("No set list defined. Generating temporary one (FIX ME) in alphebetical order")
-        setlist = [sessionName]
+        setlist = [sessionName]  # FIXME
     print("SETLIST: ", setlist)
     # Figure out what position in the setlist we are currently on
     songNumber = setlist.index(sessionName)
@@ -125,13 +154,20 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
     except IndexError:
         print("This is the last song of the set.")
         nextsong = None
+    transportProtocol = setlistConfig['ENGINE']['transport']
 
-    # TODO
+    if transportProtocol == "jack":
+        print("Using JACK transport")
+    elif transportProtocol == "osc":
+        print("Using OSC transport")
+        inport = setlistConfig['OSC']['inport']
+        outport = setlistConfig['OSC']['outport']
+        print("OSC in port: ", inport)
+        print("OSC out port: ", outport)
+    else:
+        sys.exit("Invalid transport protocol. Please fix your config.")
+
     print("NEXT SONG: ", nextsong)
-
-    # nextsong = config['SONG']['nextsong']
-    # return True, "chronotrigger.conf" # This was from the old way
-
 
 def exitProgram(ourPath, sessionName, ourClientNameUnderNSM):
     """This function is a callback for NSM.
@@ -144,9 +180,11 @@ def exitProgram(ourPath, sessionName, ourClientNameUnderNSM):
     # TODO: See if nsmclient2 can send messages to the server to announce in the GUI.. this is probably not important at all
     # ourNsmClient.sendStatusMessage("Preparing to quit. Wait for progress to finish")
     print("Song is over.")
-    print("Disconnecting from JACK")
-    client.deactivate()
-    client.close()
+
+    if transportProtocol is "jack":
+        print("Disconnecting from JACK")
+        client.deactivate()
+        client.close()
 
     if nextsong is None:
         print("Set list is over. No next song to switch to.")
@@ -220,54 +258,61 @@ NSM_URL = 'osc.udp://' + str(nsmClient.nsmOSCUrl[0]) + ':' + str(nsmClient.nsmOS
 print(NSM_URL)
 
 # THIS IS WHERE THE ACTUAL FUNCTIONAL CODE OF THE PROGRAM RUNS! ----------------------
-print("\nSTART: Connecting to JACK server")
 
-# Connect to JACK server
-client = jack.Client(nsmClient.ourClientNameUnderNSM)
-client.activate()
-print("START: Connected to JACK as:" + client.name)
+if transportProtocol is "jack":
+    # Connect to JACK server
+    print("\nSTART: Connecting to JACK server")
+    client = jack.Client(nsmClient.ourClientNameUnderNSM)
+    client.activate()
+    print("START: Connected to JACK as:" + client.name)
+    # Go to the beginning of the song
+    bar = 1
+    jack.Client.transport_locate(client, bar)
+    print("________________________________________________")
+    print("Transport state is: ", client.transport_state)
+    print("=) Song ends at bar ", endbar)
+    print("=) Switching to next song '", nextsong, "' in ", (endbar - bar), "bars")
+    jack.Client.transport_start(client)
+else:
+    # Based on Example Server from http://das.nasophon.de/pyliblo/examples.html
+    print("Creating OSC server")
+    server = liblo.Server(inport)
+    # NEXT: SEND THE REWIND AND PLAY COMMANDS
 
-# Go to the beginning of the song
-bar = 1
-jack.Client.transport_locate(client, bar)
-print("________________________________________________")
-print("Transport state is: ", client.transport_state)
+
 print("=) Current song position: Bar ", bar)
-print("=) Song ends at bar ", endbar)
-print("=) Switching to next song '", nextsong, "' in ", (endbar - bar), "bars")
 
 # Give clients a chance to load
 # TODO: Query nsmd to get all_clients_are_loaded = True instead (if running under NSM)
 sleep(1)
 
-
 # Start the transport
 print("STARTING TRANSPORT...")
-jack.Client.transport_start(client)
+
+
 print()
 
 while bar < endbar: # Wait for the song to end
     nsmClient.reactToMessage()  # Make sure this exists somewhere in your main loop
-    transport = client.transport_query()
-
-    try:
-        bar = transport[1]['bar']
-    except KeyError:
-        print("Waiting for sequencer to start.. \n")
-
     # Only react to events once per second - this keeps this from consuming lots of CPU
     sleep(1) # TODO: instead of sleeping 1 second here, do it on the beat. Could be easily done with some BPM math
 
-
-
-    # THIS SECTION IS FOR DEBUGGING.
-    # It should probably be commented out since this is not generally run in the terminal.
-    # TODO: show this stuff in the GUI when it exists.
-    print("Full JACK Transport Status: ", transport, "\n")
-    print("Transport state is: ", client.transport_state)
-    print("Current song position: Bar ", bar, "               ")
-    print("Song ends at bar ", endbar, "                      ")
-    print("Switching to next song '", nextsong, "' in ", (endbar - bar), "bars \n")
+    if transportProtocol is "jack":
+        transport = client.transport_query()
+        try:
+            bar = transport[1]['bar']
+        except KeyError:
+            print("Waiting for sequencer to start.. \n")
+        # THIS SECTION IS FOR DEBUGGING.
+        # It should probably be commented out since this is not generally run in the terminal.
+        # TODO: show this stuff in the GUI when it exists.
+        print("Full JACK Transport Status: ", transport, "\n")
+        print("Transport state is: ", client.transport_state)
+        print("Current song position: Bar ", bar, "               ")
+        print("Song ends at bar ", endbar, "                      ")
+        print("Switching to next song '", nextsong, "' in ", (endbar - bar), "bars \n")
+    else:
+        print("TODO: React to incoming OSC messages")
 
 
 # We have now reached the end of the song, so time to call the exit function
