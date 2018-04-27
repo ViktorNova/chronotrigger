@@ -26,13 +26,14 @@ bar                 = None
 endbar              = None
 nextsong            = None
 transportProtocol   = None
+host                = None
 inport              = None
 outport             = None
 play                = None
 playValue           = None
 rewind              = None
 rewindValue         = None
-
+songPosition        = None
 
 ########################################################################
 # Prepare the NSM Client
@@ -60,12 +61,14 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
     global endbar
     global nextsong
     global transportProtocol
+    global host
     global inport
     global outport
     global play
     global playValue
     global rewind
     global rewindValue
+    global songPosition
 
 
     # TODO: If config file is invalid or list a non existant session,
@@ -117,7 +120,8 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
         setlistConfig.set('ENGINE', '# Transport can be either osc or jack')
         setlistConfig.set('ENGINE', 'transport', 'jack')
         setlistConfig.add_section('OSC')
-        setlistConfig.set('OSC', '# Define your custom OSC commands here')
+        setlistConfig.set('OSC', '# Define your custom OSC parameters here')
+        setlistConfig.set('OSC', 'host', 'localhost')
         setlistConfig.set('OSC', 'play', '/play')
         setlistConfig.set('OSC', 'inport', '9000')
         setlistConfig.set('OSC', 'outport', '8000')
@@ -160,10 +164,24 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
         print("Using JACK transport")
     elif transportProtocol == "osc":
         print("Using OSC transport")
+        host = setlistConfig['OSC']['host']
         inport = setlistConfig['OSC']['inport']
         outport = setlistConfig['OSC']['outport']
+        play = setlistConfig['OSC']['play']
+        playValue = setlistConfig['OSC']['playValue']
+        rewind = setlistConfig['OSC']['rewind']
+        rewindValue = setlistConfig['OSC']['rewindValue']
+        songPosition = setlistConfig['OSC']['songPosition']
+        # These print statements can probably be removed in the future:
+        print("OSC host: ", host)
         print("OSC in port: ", inport)
         print("OSC out port: ", outport)
+        print("OSC out port: ", outport)
+        print("Play message: ", play)
+        print("Play value: ", playValue)
+        print("Rewind message: ", rewind)
+        print("Rewind value: ", rewindValue)
+        print("Song position message: ", songPosition)
     else:
         sys.exit("Invalid transport protocol. Please fix your config.")
 
@@ -237,17 +255,11 @@ nsmClient = NSMClient(prettyName = niceTitle,
 # If NSM did not start up properly the program quits here.
 
 ########################################################################
-# If your project uses JACK, activate your client here
-# You can use jackClientName or create your own
-########################################################################
-jackClientName = nsmClient.ourClientNameUnderNSM
-
-########################################################################
 # Start main program loop.
 ########################################################################
 
 # showGUICallback()  # If you want your GUI to be shown by default, uncomment this line
-print("Entering main loop")
+print("Let's go!")
 
 # TODO: Get this to be able to send OSC messages to NSM.
 # The next line is a failed attempt, but it should be sort of related
@@ -259,8 +271,12 @@ print(NSM_URL)
 
 # THIS IS WHERE THE ACTUAL FUNCTIONAL CODE OF THE PROGRAM RUNS! ----------------------
 
+# Start the transport
+print("STARTING TRANSPORT...")
+
 if transportProtocol is "jack":
     # Connect to JACK server
+    jackClientName = nsmClient.ourClientNameUnderNSM
     print("\nSTART: Connecting to JACK server")
     client = jack.Client(nsmClient.ourClientNameUnderNSM)
     client.activate()
@@ -277,7 +293,17 @@ else:
     # Based on Example Server from http://das.nasophon.de/pyliblo/examples.html
     print("Creating OSC server")
     server = liblo.Server(inport)
-    # NEXT: SEND THE REWIND AND PLAY COMMANDS
+    # Rewind to beginning of song and begin playback
+    OSC_URL = 'osc.udp://' + str(host) + ':' + str(outport) + '/'
+    message = liblo.Message(str(play), str(playValue))
+    # TODO: figure out a way to detect if Reaper (or whatever) is actually running before sending this.
+    # TODO: Probably use the OSC server to determine whether or not it is playing, and loop this until it is playing
+    print("Sending ", play, playValue, " to ", OSC_URL)
+    liblo.send(OSC_URL, message)
+    message = liblo.Message(str(rewind), str(rewindValue))
+    print("Sending ", rewind, rewindValue, " to ", OSC_URL)
+    liblo.send(OSC_URL, message)
+
 
 
 print("=) Current song position: Bar ", bar)
@@ -286,12 +312,8 @@ print("=) Current song position: Bar ", bar)
 # TODO: Query nsmd to get all_clients_are_loaded = True instead (if running under NSM)
 sleep(1)
 
-# Start the transport
-print("STARTING TRANSPORT...")
 
-
-print()
-
+print("Entering main loop")
 while bar < endbar: # Wait for the song to end
     nsmClient.reactToMessage()  # Make sure this exists somewhere in your main loop
     # Only react to events once per second - this keeps this from consuming lots of CPU
