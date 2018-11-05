@@ -8,7 +8,7 @@ import configparser
 from time import sleep
 import subprocess
 import os                   # TODO: Import only the parts of OS we actually need
-import liblo                # This is a dirty hack and redundant. DO it the right way
+import liblo
 
 
 
@@ -35,7 +35,7 @@ rewind              = None
 rewindValue         = None
 songPosition        = None
 
-########################################################################
+####################################################### This is a dirty hack and redundant. DO it the right way##################
 # Prepare the NSM Client
 # This has to be done as the first thing because NSM needs to get the paths
 # and may quit if NSM environment var was not found.
@@ -271,6 +271,11 @@ print(NSM_URL)
 
 # THIS IS WHERE THE ACTUAL FUNCTIONAL CODE OF THE PROGRAM RUNS! ----------------------
 
+# Give clients a chance to load
+# TODO: Query nsmd to get all_clients_are_loaded = True instead (if running under NSM)
+sleep(1)
+
+
 # Start the transport
 print("STARTING TRANSPORT...")
 
@@ -290,52 +295,71 @@ if transportProtocol is "jack":
     print("=) Switching to next song '", nextsong, "' in ", (endbar - bar), "bars")
     jack.Client.transport_start(client)
 else:
+    print("Creating OSC server") # TODO: FINISH THIS!!!
     # Based on Example Server from http://das.nasophon.de/pyliblo/examples.html
-    print("Creating OSC server")
     server = liblo.Server(inport)
+
     # Rewind to beginning of song and begin playback
+    # TODO: figure out a way to detect if Reaper (or whatever) is actually running before sending this, or the command will fall on deaf ears.
+    # TODO: Probably use the OSC server to determine whether or not it is playing, and loop this playback is confirmed
     OSC_URL = 'osc.udp://' + str(host) + ':' + str(outport) + '/'
-    message = liblo.Message(str(play), str(playValue))
-    # TODO: figure out a way to detect if Reaper (or whatever) is actually running before sending this.
-    # TODO: Probably use the OSC server to determine whether or not it is playing, and loop this until it is playing
-    print("Sending ", play, playValue, " to ", OSC_URL)
-    liblo.send(OSC_URL, message)
     message = liblo.Message(str(rewind), str(rewindValue))
     print("Sending ", rewind, rewindValue, " to ", OSC_URL)
     liblo.send(OSC_URL, message)
-
+    message = liblo.Message(str(play), str(playValue))
+    print("Sending ", play, playValue, " to ", OSC_URL)
+    liblo.send(OSC_URL, message)
+    bar = 1
+    endbar = float(endbar)
 
 
 print("=) Current song position: Bar ", bar)
 
-# Give clients a chance to load
-# TODO: Query nsmd to get all_clients_are_loaded = True instead (if running under NSM)
-sleep(1)
-
 
 print("Entering main loop")
-while bar < endbar: # Wait for the song to end
-    nsmClient.reactToMessage()  # Make sure this exists somewhere in your main loop
-    # Only react to events once per second - this keeps this from consuming lots of CPU
-    sleep(1) # TODO: instead of sleeping 1 second here, do it on the beat. Could be easily done with some BPM math
+try:
+    while bar < endbar: # Wait for the song to end
+        nsmClient.reactToMessage()  # Make sure this exists somewhere in your main loop
+        # Only react to events once per second - this keeps this from consuming lots of CPU
 
-    if transportProtocol is "jack":
-        transport = client.transport_query()
-        try:
-            bar = transport[1]['bar']
-        except KeyError:
-            print("Waiting for sequencer to start.. \n")
-        # THIS SECTION IS FOR DEBUGGING.
-        # It should probably be commented out since this is not generally run in the terminal.
-        # TODO: show this stuff in the GUI when it exists.
-        print("Full JACK Transport Status: ", transport, "\n")
-        print("Transport state is: ", client.transport_state)
-        print("Current song position: Bar ", bar, "               ")
-        print("Song ends at bar ", endbar, "                      ")
-        print("Switching to next song '", nextsong, "' in ", (endbar - bar), "bars \n")
-    else:
-        print("TODO: React to incoming OSC messages")
+        if transportProtocol is "jack":
+            transport = client.transport_query()
+            try:
+                bar = transport[1]['bar']
+            except KeyError:
+                print("Waiting for sequencer to start.. \n")
+            # THIS SECTION IS FOR DEBUGGING.
+            # It should probably be commented out since this is not generally run in the terminal.
+            # TODO: show this stuff in the GUI when it exists.
+            print("Full JACK Transport Status: ", transport, "\n")
+            print("Transport state is: ", client.transport_state)
+            print("Current song position: Bar ", bar, "               ")
+            print("Song ends at bar ", endbar, "                      ")
+            print("Switching to next song '", nextsong, "' in ", (endbar - bar), "bars \n")
+            sleep(1) # TODO: instead of sleeping 1 second here, do it on the beat. Could be easily done with some BPM math
+        else:
+            print("TODO: React to incoming OSC messages")
+            server.recv(1000)    # Receive OSC messages every 1ms
 
+
+
+            def receiveReaperCurrentBar(path, args):
+                print("received message '%s'" % path, args)
+                s = args[0].rsplit(".",1)
+                print("s = ", s)
+                global bar          # access bar from the global scope
+                bar = float(s[0])   # convert Reaper's time beat position into a float, drop the last decimal
+
+            server.add_method("/beat/str", None, receiveReaperCurrentBar)
+            print("Bar = ", bar)
+
+except TypeError:
+    print("Cannot determine song position. Stopping...")
+    exit(1)
+
+print("SONG IS OVER!")
+print("Pretending to switch to the next song now (please delete this section)")
+exit(0)
 
 # We have now reached the end of the song, so time to call the exit function
 # which will clean up nicely, then switch to the next song
