@@ -385,9 +385,9 @@ except TypeError:
     print("Cannot determine song position. Stopping...")
     exit(1)
 
-print("SONG IS OVER!")
-print("Pretending to switch to the next song now (please delete this section)")
-exit(0)
+# print("SONG IS OVER!")
+# print("Pretending to switch to the next song now (please delete this section)")
+# exit(0)
 
 # We have now reached the end of the song, so time to call the exit function
 # which will clean up nicely, then switch to the next song
