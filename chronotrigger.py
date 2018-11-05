@@ -31,6 +31,8 @@ inport              = None
 outport             = None
 play                = None
 playValue           = None
+stop                = None
+stopValue           = None
 rewind              = None
 rewindValue         = None
 songPosition        = None
@@ -66,6 +68,8 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
     global outport
     global play
     global playValue
+    global stop
+    global stopValue
     global rewind
     global rewindValue
     global songPosition
@@ -122,10 +126,12 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
         setlistConfig.add_section('OSC')
         setlistConfig.set('OSC', '# Define your custom OSC parameters here')
         setlistConfig.set('OSC', 'host', 'localhost')
-        setlistConfig.set('OSC', 'play', '/play')
         setlistConfig.set('OSC', 'inport', '9000')
         setlistConfig.set('OSC', 'outport', '8000')
+        setlistConfig.set('OSC', 'play', '/play')
         setlistConfig.set('OSC', 'playValue', '1')
+        setlistConfig.set('OSC', 'stop', '/play')
+        setlistConfig.set('OSC', 'stopValue', '1')
         setlistConfig.set('OSC', 'rewind', '/time')
         setlistConfig.set('OSC', 'rewindValue', '0')
         setlistConfig.set('OSC', 'songPosition', '/beat/str')
@@ -169,6 +175,9 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
         outport = setlistConfig['OSC']['outport']
         play = setlistConfig['OSC']['play']
         playValue = setlistConfig['OSC']['playValue']
+        stop = setlistConfig['OSC']['stop']
+        stopValue = setlistConfig['OSC']['stopValue']
+
         rewind = setlistConfig['OSC']['rewind']
         rewindValue = setlistConfig['OSC']['rewindValue']
         songPosition = setlistConfig['OSC']['songPosition']
@@ -179,6 +188,8 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
         print("OSC out port: ", outport)
         print("Play message: ", play)
         print("Play value: ", playValue)
+        print("Stop message: ", stop)
+        print("Stop value: ", stopValue)
         print("Rewind message: ", rewind)
         print("Rewind value: ", rewindValue)
         print("Song position message: ", songPosition)
@@ -276,49 +287,59 @@ print(NSM_URL)
 sleep(1)
 
 
-# Start the transport
+# START THE TRANSPORT ----------------------------------
 print("STARTING TRANSPORT...")
 
-if transportProtocol is "jack":
+
+def startJackTransport():
     # Connect to JACK server
-    jackClientName = nsmClient.ourClientNameUnderNSM
+    global endbar
+    jack.Client.transport_locate(client, 1)
+    print("________________________________________________")
+    print("Transport state is: ", client.transport_state)
+    print("=) Song ends at bar ", endbar)
+    print("=) Switching to next song '", nextsong, "' in ", (endbar - 1), "bars")
+    jack.Client.transport_start(client)
+
+def rewindOSCTransport(url):
+    # Rewind to beginning of song
+    message = liblo.Message(str(rewind), str(rewindValue))
+    print("Sending ", rewind, rewindValue, " to ", url)
+    liblo.send(url, message)
+
+
+def startOSCTransport(url):
+    # Stop playback in case it is currently playing
+    message = liblo.Message(str(stop), str(stopValue))
+    print("Sending ", stop, stopValue, " to ", url)
+    liblo.send(url, message)
+    # Begin playback
+    message = liblo.Message(str(play), str(playValue))
+    print("Sending ", play, playValue, " to ", url)
+    liblo.send(url, message)
+
+
+bar = 0
+
+# Create JACK client or OSC Server
+if transportProtocol is "jack":
     print("\nSTART: Connecting to JACK server")
     client = jack.Client(nsmClient.ourClientNameUnderNSM)
     client.activate()
     print("START: Connected to JACK as:" + client.name)
     # Go to the beginning of the song
-    bar = 1
-    jack.Client.transport_locate(client, bar)
-    print("________________________________________________")
-    print("Transport state is: ", client.transport_state)
-    print("=) Song ends at bar ", endbar)
-    print("=) Switching to next song '", nextsong, "' in ", (endbar - bar), "bars")
-    jack.Client.transport_start(client)
+    startJackTransport()
 else:
-    print("Creating OSC server") # TODO: FINISH THIS!!!
-    # Based on Example Server from http://das.nasophon.de/pyliblo/examples.html
+    print("Creating OSC server")
     server = liblo.Server(inport)
-
-    # Rewind to beginning of song and begin playback
-    # TODO: figure out a way to detect if Reaper (or whatever) is actually running before sending this, or the command will fall on deaf ears.
-    # TODO: Probably use the OSC server to determine whether or not it is playing, and loop this playback is confirmed
-    OSC_URL = 'osc.udp://' + str(host) + ':' + str(outport) + '/'
-    message = liblo.Message(str(rewind), str(rewindValue))
-    print("Sending ", rewind, rewindValue, " to ", OSC_URL)
-    liblo.send(OSC_URL, message)
-    message = liblo.Message(str(play), str(playValue))
-    print("Sending ", play, playValue, " to ", OSC_URL)
-    liblo.send(OSC_URL, message)
-    bar = 1
     endbar = float(endbar)
-
-
-print("=) Current song position: Bar ", bar)
-
+    OSC_URL = 'osc.udp://' + str(host) + ':' + str(outport) + '/'
+    rewindOSCTransport(OSC_URL)
+    startOSCTransport(OSC_URL)
 
 print("Entering main loop")
 try:
-    while bar < endbar: # Wait for the song to end
+    while bar < endbar:     # Wait for the song to end
         nsmClient.reactToMessage()  # Make sure this exists somewhere in your main loop
         # Only react to events once per second - this keeps this from consuming lots of CPU
 
@@ -339,9 +360,7 @@ try:
             sleep(1) # TODO: instead of sleeping 1 second here, do it on the beat. Could be easily done with some BPM math
         else:
             print("TODO: React to incoming OSC messages")
-            server.recv(1000)    # Receive OSC messages every 1ms
-
-
+            server.recv(400)    # Receive OSC messages every 1ms
 
             def receiveReaperCurrentBar(path, args):
                 print("received message '%s'" % path, args)
@@ -351,7 +370,16 @@ try:
                 bar = float(s[0])   # convert Reaper's time beat position into a float, drop the last decimal
 
             server.add_method("/beat/str", None, receiveReaperCurrentBar)
+
             print("Bar = ", bar)
+
+            # TODO: Figure out how to restart playback if it's not running
+            # Try every 1 second to start the Reaper transport until we have confirmation that it has been started
+            # (for some reason this always thinks bar is zero, which makes no sense)
+            # if bar < 1.1:
+            #     print("We think bar = 0 ", bar)
+            #     startOSCTransport(OSC_URL)
+            #     sleep(1)
 
 except TypeError:
     print("Cannot determine song position. Stopping...")
