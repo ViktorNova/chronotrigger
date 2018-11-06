@@ -130,7 +130,7 @@ def openCallback(ourPath, sessionName, ourClientNameUnderNSM):
         setlistConfig.set('OSC', 'outport', '8000')
         setlistConfig.set('OSC', 'play', '/play')
         setlistConfig.set('OSC', 'playValue', '1')
-        setlistConfig.set('OSC', 'stop', '/play')
+        setlistConfig.set('OSC', 'stop', '/stop')
         setlistConfig.set('OSC', 'stopValue', '1')
         setlistConfig.set('OSC', 'rewind', '/time')
         setlistConfig.set('OSC', 'rewindValue', '0')
