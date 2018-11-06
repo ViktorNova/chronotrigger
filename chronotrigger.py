@@ -332,8 +332,26 @@ if transportProtocol is "jack":
 else:
     print("Creating OSC server")
     server = liblo.Server(inport)
-    endbar = float(endbar)
+    endbar = float(endbar)  # Convert endbar to a float to handle Reaper's
     OSC_URL = 'osc.udp://' + str(host) + ':' + str(outport) + '/'
+
+    # WAIT FOR CONFIRMATION THAT REAPER IS UP AND RUNNING AND THE SESSION IS LOADED
+    # Reaper sends /play when initializing a newly opened project (among other things),
+    # but also when playback begins. This is important because in the rare case that Reaper
+    # opens before this, clicking play manually in Reaper will unblock this step and allow us to continue
+    # TODO: Find a better way to do this. I could try pinging Reaper with messages that get a response until it responds - for instance I could alternate /pause and /stop forever until Reaper responds back with a /pause or /stop. Maybe I'm overthinking it
+    reaperIsReady = False
+    while not reaperIsReady:
+            server.recv(400)    # Receive OSC messages every 400ms
+
+            def reaperPing(path, args):
+                global reaperIsReady
+                reaperIsReady = True
+                print("Received /play message from Reaper. "
+                      "The session is loaded (or playback was started manually)")
+
+            server.add_method("/play", None, reaperPing)
+
     rewindOSCTransport(OSC_URL)
     startOSCTransport(OSC_URL)
 
@@ -341,7 +359,6 @@ print("Entering main loop")
 try:
     while bar < endbar:     # Wait for the song to end
         nsmClient.reactToMessage()  # Make sure this exists somewhere in your main loop
-        # Only react to events once per second - this keeps this from consuming lots of CPU
 
         if transportProtocol is "jack":
             transport = client.transport_query()
@@ -357,10 +374,11 @@ try:
             print("Current song position: Bar ", bar, "               ")
             print("Song ends at bar ", endbar, "                      ")
             print("Switching to next song '", nextsong, "' in ", (endbar - bar), "bars \n")
+            # Only react to events once per second - this keeps this from consuming lots of CPU
             sleep(1) # TODO: instead of sleeping 1 second here, do it on the beat. Could be easily done with some BPM math
+
         else:
-            print("TODO: React to incoming OSC messages")
-            server.recv(400)    # Receive OSC messages every 1ms
+            server.recv(400)    # Receive OSC messages every 400ms
 
             def receiveReaperCurrentBar(path, args):
                 print("received message '%s'" % path, args)
@@ -373,13 +391,6 @@ try:
 
             print("Bar = ", bar)
 
-            # TODO: Figure out how to restart playback if it's not running
-            # Try every 1 second to start the Reaper transport until we have confirmation that it has been started
-            # (for some reason this always thinks bar is zero, which makes no sense)
-            # if bar < 1.1:
-            #     print("We think bar = 0 ", bar)
-            #     startOSCTransport(OSC_URL)
-            #     sleep(1)
 
 except TypeError:
     print("Cannot determine song position. Stopping...")
